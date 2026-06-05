@@ -1,0 +1,12 @@
+name = "Lemmas"
+testDriver = "test"
+lintDriver = "batteries/runLinter"
+defaultTargets = ["Lemmas"]
+
+[[require]]
+name = "Parser"
+git = "https://github.com/fgdorais/lean4-parser"
+rev = "1ae79584c208846a52d324fcfc5f62b5a30ce03f"
+
+[[lean_lib]]
+name = "Lemmas"
