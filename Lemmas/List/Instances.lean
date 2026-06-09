@@ -4,7 +4,6 @@ import Std.Tactic.Do
 import Std.Tactic.Do.Syntax
 
 import Lemmas.Lemmas
-import Lemmas.List.Basic
 
 open Lean Lean.Syntax Parser Parser.Char
 
@@ -13,6 +12,18 @@ open Std.Do
 set_option mvcgen.warning false
 
 namespace Parser.OfList
+
+/- see https://github.com/fgdorais/lean4-parser/pull/99, remove when PR#99 is merged
+ -/
+instance : Parser.Stream.Remaining (Parser.Stream.OfList τ) where
+  remaining s := s.next.length
+
+instance : Parser.Stream.ValidPosition (Parser.Stream.OfList τ)  where
+  valid s := True
+  validOfRemaining _ _ := by simp
+
+instance : Parser.Stream.AllValid (Parser.Stream.OfList τ) where
+  valid := by simp [Stream.ValidPosition.valid]
 
 @[simp] private def respectsPosition (it rem : (Parser.Stream.OfList τ)) :=
   it.past.reverse ++ it.next = rem.past.reverse ++ rem.next
@@ -35,7 +46,7 @@ private theorem getPositionOkEq (it : (Parser.Stream.OfList τ))
   unfold Stream.OfList.setPosition.fwd
   simp_all
 
-theorem fwdTakeReverseEq (it : (Parser.Stream.OfList τ)) (n) (h : n ≤ it.next.length)
+private theorem fwdTakeReverseEq (it : (Parser.Stream.OfList τ)) (n) (h : n ≤ it.next.length)
     : Stream.OfList.setPosition.fwd n ⟨it.next, it.past⟩
       = ⟨it.next.drop n, (it.next.take n).reverse ++ it.past⟩ := by
   induction n generalizing it
@@ -46,11 +57,6 @@ theorem fwdTakeReverseEq (it : (Parser.Stream.OfList τ)) (n) (h : n ≤ it.next
       have hi := h_1 ⟨next, x :: it.past⟩ (by grind)
       simp [*]
     | [] => simp_all
-
-private theorem fwdNextLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle : n ≤ it.next.length)
-    : (Stream.OfList.setPosition.fwd n it).next.length = it.next.length - n := by
-  rw [fwdTakeReverseEq it n hle]
-  simp_all +arith
 
 private theorem fwdPastLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle : n ≤ it.next.length)
     : (Stream.OfList.setPosition.fwd n it).past.length = it.past.length + n := by
@@ -68,7 +74,7 @@ private theorem fwdPastLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle 
   unfold Stream.OfList.setPosition.rev
   simp_all
 
-theorem revTakeReverseEq (it : (Parser.Stream.OfList τ)) (n) (h : n ≤ it.past.length)
+private theorem revTakeReverseEq (it : (Parser.Stream.OfList τ)) (n) (h : n ≤ it.past.length)
     : Stream.OfList.setPosition.rev n ⟨it.next, it.past⟩
       = ⟨(it.past.take n).reverse ++ it.next, it.past.drop n⟩ := by
   induction n generalizing it
@@ -80,11 +86,6 @@ theorem revTakeReverseEq (it : (Parser.Stream.OfList τ)) (n) (h : n ≤ it.past
       simp [*]
     | [] => simp_all
 
-private theorem revNextLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle : n ≤ it.past.length)
-    : (Stream.OfList.setPosition.rev n it).next.length = it.next.length + n := by
-  rw [revTakeReverseEq it n hle]
-  simp_all +arith
-
 private theorem revPastLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle : n ≤ it.past.length)
     : (Stream.OfList.setPosition.rev n it).past.length = it.past.length - n := by
   rw [revTakeReverseEq it n hle]
@@ -93,89 +94,75 @@ private theorem revPastLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle 
 private theorem setPositionPrecondition (it : (Parser.Stream.OfList τ))
   (pos : Stream.Position (Parser.Stream.OfList τ))
     : pos ≤ it.past.length + it.next.length
-      → ∃ r, (setPosition pos : (SimpleParser (Parser.Stream.OfList τ) τ) Unit) it = r
-            ∧ (∃ rem, r = Result.ok rem () ∧ pos = rem.past.length
-                        ∧ respectsPosition it rem) := by
-  dsimp [setPosition, Stream.setPosition, Stream.OfList.setPosition,
-    getStream, setStream, pure, Applicative.toPure, Monad.toApplicative, bind]
-  simp_all
+      → ∃ rem, Stream.setPosition it pos = rem
+              ∧ pos = Parser.Stream.getPosition rem
+              ∧ respectsPosition it rem := by
+  simp [Stream.setPosition, Stream.getPosition, Stream.OfList.setPosition]
   intro h
-  split
-  · exact ⟨Stream.OfList.setPosition.fwd (pos - it.past.length) it, by
-      and_intros
-      · rfl
-      · rw [fwdPastLengthEq it (pos - it.past.length) (Nat.sub_le_iff_le_add'.mpr h)]
-        grind
-      · have := fwdTakeReverseEq it (pos - it.past.length) (Nat.sub_le_iff_le_add'.mpr h)
-        rw [this]
-        simp⟩
-  · have hle : pos ≤ it.past.length := by grind
-    exact ⟨Stream.OfList.setPosition.rev (it.past.length - pos) it, by
-      and_intros
-      · rfl
-      · rw [revPastLengthEq it (it.past.length - pos) (Nat.sub_le it.past.length pos)]
-        grind
-      · have := revTakeReverseEq it (it.past.length - pos) (Nat.sub_le it.past.length pos)
-        rw [this]
-        rw [← List.append_assoc, ← List.reverse_append]
-        simp_all⟩
-
-private theorem setPositionEq (it : (Parser.Stream.OfList τ)) (pos)
-  (h : (setPosition pos : (SimpleParser (Parser.Stream.OfList τ) τ) Unit) it = Result.ok s ())
-  (h : pos ≤ it.past.length + it.next.length)
-    : s.past.length = pos ∧ respectsPosition it s := by
-  have := setPositionPrecondition it pos h
-  grind
+  and_intros
+  · split
+    · rw [fwdPastLengthEq it (pos - it.past.length) (Nat.sub_le_iff_le_add'.mpr h)]
+      grind
+    · rw [revPastLengthEq it (it.past.length - pos) (Nat.sub_le it.past.length pos)]
+      grind
+  · split
+    · have := fwdTakeReverseEq it (pos - it.past.length) (Nat.sub_le_iff_le_add'.mpr h)
+      rw [this]
+      simp
+    · have := revTakeReverseEq it (it.past.length - pos) (Nat.sub_le it.past.length pos)
+      rw [this]
+      rw [← List.append_assoc, ← List.reverse_append]
+      simp_all
 
 /-- no input is consumed if the position is reset after applying a respectful parser -/
-private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 s3 s4 : (Parser.Stream.OfList τ) )
-  (h1 : (getPosition : (SimpleParser (Parser.Stream.OfList τ) τ) _) s1 = Result.ok s2 p)
-  (h2 : respectsPosition s2 s3)
-  (h3 : (setPosition p : (SimpleParser (Parser.Stream.OfList τ) τ) Unit) s3 = Result.ok s4 ())
-    : s1 = s4 := by
-  simp_all
-  have := getPositionOkEq s1 h1
-  have := setPositionEq s3 p h3 (by
-    simp_all
-    have : p = s2.past.length := by grind
-    rw [this]
-    have : (s2.past.reverse ++ s2.next).length = (s3.past.reverse ++ s3.next).length := by grind
-    have : s2.past.length + s2.next.length = s3.past.length + s3.next.length := by grind
-    rw [← this]
-    exact Nat.le_add_right s2.past.length s2.next.length)
-  simp [respectsPosition] at this
-  have h4 : s2.past.reverse ++ s2.next = s4.past.reverse ++ s4.next := by grind
-  have := List.append_inj_left h4 (by grind)
-  have := List.append_inj_right h4 (by grind)
-  match hm : (s2, s4) with | (⟨s2n, s2p⟩, ⟨s4n, s4p⟩) => simp_all
+private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : (Parser.Stream.OfList τ))
+  (p) (h1 : Stream.getPosition s1 = p) (h2 : respectsPosition s1 s2)
+    : Stream.setPosition s2 p = s1 := by
+  have ⟨r, And.intro hr ⟨hg, hs⟩ ⟩ := setPositionPrecondition s2 p (by
+    simp [Stream.getPosition] at h1
+    simp [respectsPosition] at h2
+    have : (s2.past.reverse ++ s2.next).length = (s1.past.reverse ++ s1.next).length := by grind      --have : s2.past.length + s2.next.length = s1.past.length + s1.next.length := by grind
+    grind)
+  rw [hr]
+
+  have : s1.past.length = r.past.length := by
+    rw [hg] at h1
+    simp [Stream.getPosition] at h1
+    assumption
+
+  simp [respectsPosition] at hs
+  rw [← h2] at hs
+  have := (@List.reverse_inj _ s1.past r.past).mp (List.append_inj_left hs (by grind))
+  have := List.append_inj_right hs (by grind)
+  cases s1
+  cases r
+  grind
 
 instance : Stream.RespectsPosition (Parser.Stream.OfList τ) τ where
   respectsPosition := respectsPosition
-  setPositionOfGetPositionEq s1 s2 s3 s4 :=
-    fun h => setPositionOfGetPositionEqIfRespectsPosition s1 s2 s3 s4
-  respectsPositionEq (it) := by simp [respectsPosition]
+  setPositionOfGetPositionEq s1 s2 p :=
+    fun h => setPositionOfGetPositionEqIfRespectsPosition s1 s2 p
+  isEquivalence := Equivalence.mk (by simp) (by simp; grind) (by simp; grind)
 
 instance : Stream.SetPositionPrecondition (Parser.Stream.OfList τ) τ where
   cond it pos := pos ≤ it.past.length + it.next.length
   validResult it pos := setPositionPrecondition it pos
-  ofGetPosition (s1 s2 s3 : Parser.Stream.OfList τ) (p : Stream.Position (Parser.Stream.OfList τ)) := by
-    intro _ h1 h2
-    have := getPositionOkEq s1 h1
-    simp [Stream.RespectsPosition.respectsPosition] at h2
-    simp_all
-    have : p = s2.past.length := by grind
+  ofGetPosition (s1 s2 : Parser.Stream.OfList τ) (p : Stream.Position (Parser.Stream.OfList τ)) := by
+    simp [Stream.ValidPosition.valid, Stream.RespectsPosition.respectsPosition,
+          Stream.getPosition]
+    intro h1 h2
+    rw [← h1]
+    have : (s2.past.reverse ++ s2.next).length = (s1.past.reverse ++ s1.next).length := by grind
+    have : s2.past.length + s2.next.length = s1.past.length + s1.next.length := by grind
     rw [this]
-    have : (s2.past.reverse ++ s2.next).length = (s3.past.reverse ++ s3.next).length := by grind
-    have : s2.past.length + s2.next.length = s3.past.length + s3.next.length := by grind
-    rw [← this]
-    exact Nat.le_add_right s2.past.length s2.next.length
+    simp
 
 private theorem next?SomeOfLt (it : Parser.Stream.OfList τ)
   (h : 0 < Stream.Remaining.remaining it)
     : ∃ rem c, Std.Stream.next? it = some (c, rem) ∧ Stream.decrementsRemaining it rem
                                   ∧ respectsPosition it rem := by
   simp [Stream.Remaining.remaining] at h
-  simp [Std.Stream.next?, Stream.Remaining.remaining]
+  simp [Std.Stream.next?, Stream.decrementsRemaining, Stream.Remaining.remaining]
   have : ∃ x next, it = ⟨x :: next, it.past⟩  := by
     have := List.exists_cons_of_length_pos h
     match it with | ⟨_, _⟩ => simp_all

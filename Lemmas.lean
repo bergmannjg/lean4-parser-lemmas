@@ -1,6 +1,5 @@
 import Lemmas.Basic
 import Lemmas.Lemmas
-import Lemmas.String.Basic
-import Lemmas.String.Lemmas
-import Lemmas.List.Basic
-import Lemmas.List.Lemmas
+import Lemmas.String.Instances
+import Lemmas.Substring.Instances
+import Lemmas.List.Instances

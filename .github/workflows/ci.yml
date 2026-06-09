@@ -30,6 +30,6 @@ jobs:
         name: Build
         uses: leanprover/lean-action@v1
         with:
-          lint: false
+          lint: true
           test: false
           use-github-cache: false
