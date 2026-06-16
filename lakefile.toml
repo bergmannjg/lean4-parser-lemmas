@@ -1,7 +1,6 @@
 name = "Lemmas"
-testDriver = "test"
 lintDriver = "batteries/runLinter"
-defaultTargets = ["Lemmas"]
+defaultTargets = ["Lemmas", "Example"]
 
 [[require]]
 name = "Parser"
@@ -10,3 +9,6 @@ rev = "1ae79584c208846a52d324fcfc5f62b5a30ce03f"
 
 [[lean_lib]]
 name = "Lemmas"
+
+[[lean_lib]]
+name = "Example"

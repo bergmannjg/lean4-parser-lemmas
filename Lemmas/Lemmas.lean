@@ -15,7 +15,20 @@ namespace Parser
 
 /-! Theorems for SimpleParser σ τ -/
 
-@[simp] theorem respectsPositionOfSeqRight (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+@[grind .] theorem remainingLtOrEq (σ : Type) [Stream.Remaining σ] (it : σ)
+    : 0 < Stream.Remaining.remaining it ∨ 0 = Stream.Remaining.remaining it := by
+  grind
+
+open Parser.Stream in
+theorem ltRemainingOfDecrementsRemainingOnSuccess [Parser.Stream σ τ]
+  [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
+  (p : SimpleParser σ τ α) (h : p it = Result.ok it' a)
+  (hv : ValidPosition.valid it) (hd : decrementsRemainingOnSuccess _ _ p)
+    : Remaining.remaining it' < Remaining.remaining it := by
+  simp [decrementsRemainingOnSuccess, decrementsRemaining] at hd
+  solve_by_elim
+
+theorem seqRightRespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
   (p : SimpleParser σ τ α) (q : SimpleParser σ τ β)
   (hp : respectsPosition _ _ p) (hq : respectsPosition _ _ q)
@@ -54,6 +67,56 @@ namespace Parser
       have hp : Stream.RespectsPosition.respectsPosition τ it s := by grind
       grind
 
+@[simp] theorem notIncrementsRemainingOnSuccessIfDecrements (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
+  (p : SimpleParser σ τ α) (h : decrementsRemainingOnSuccess _ _ p)
+      : notIncrementsRemainingOnSuccess _ _ p := by
+  simp [notIncrementsRemainingOnSuccess, Stream.notIncrementsRemaining]
+  simp [decrementsRemainingOnSuccess, Stream.decrementsRemaining] at h
+  grind
+
+theorem seqRightDecrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
+  (p : SimpleParser σ τ α) (q : SimpleParser σ τ β)
+  (hpl : notIncrementsRemainingOnSuccess _ _ p)
+  (hqd : decrementsRemainingOnSuccess _ _ q)
+      : decrementsRemainingOnSuccess _ _ (p *> q) := by
+  simp [decrementsRemainingOnSuccess, Stream.decrementsRemaining]
+  simp [notIncrementsRemainingOnSuccess, Stream.notIncrementsRemaining] at hpl
+  simp [decrementsRemainingOnSuccess, Stream.decrementsRemaining] at hqd
+  have h : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
+  intro rem _ _ _
+  expose_names
+  simp [SeqRight.seqRight, bind, pure]
+  split
+  · split
+    · expose_names
+      have := hqd s s_1 a_2 (by grind) heq_1
+      grind
+    · simp_all
+  · simp_all
+
+theorem seqRightNotIncrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
+  (p : SimpleParser σ τ α) (q : SimpleParser σ τ β)
+  (hpl : notIncrementsRemainingOnSuccess _ _ p)
+  (hqd : notIncrementsRemainingOnSuccess _ _ q)
+      : notIncrementsRemainingOnSuccess _ _ (p *> q) := by
+  simp [notIncrementsRemainingOnSuccess, Stream.notIncrementsRemaining]
+  simp [notIncrementsRemainingOnSuccess, Stream.notIncrementsRemaining] at hpl
+  simp [notIncrementsRemainingOnSuccess, Stream.notIncrementsRemaining] at hqd
+  have h : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
+  intro rem _ _ _
+  expose_names
+  simp [SeqRight.seqRight, bind, pure]
+  split
+  · split
+    · expose_names
+      have := hqd s s_1 a_2 (by grind) heq_1
+      grind
+    · simp_all
+  · simp_all
+
 @[simp] theorem respectsPositionOfConsumesNoInput (σ τ : Type) [Parser.Stream σ τ]
   [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
   (p : SimpleParser σ τ α) (h : consumesNoInput _ _ p)
@@ -65,7 +128,20 @@ namespace Parser
   simp_all
   exact Stream.RespectsPosition.isEquivalence.refl it
 
-@[simp] theorem respectsPositionOrElse (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+@[simp] theorem pureRespectsPosition (σ τ : Type) [Parser.Stream σ τ]
+  [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
+      : respectsPosition _ _ (pure a : SimpleParser σ τ α ) := by
+  exact respectsPositionOfConsumesNoInput σ τ (pure a) (congrFun rfl)
+
+@[simp] theorem pureNotIncrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ]
+  [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
+      : notIncrementsRemainingOnSuccess _ _ (pure a : SimpleParser σ τ α) := by
+  simp [notIncrementsRemainingOnSuccess, Stream.notIncrementsRemaining]
+  intros _
+  simp [pure]
+  grind
+
+@[simp] theorem orElseRespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
   (p : SimpleParser σ τ α) (q : SimpleParser σ τ α)
   (hp : respectsPosition _ _ p) (hq : respectsPosition _ _ q)
@@ -97,25 +173,29 @@ namespace Parser
       have := hq it (by grind)
       simp_all
 
-@[simp] theorem decrementsRemainingOnSuccessOrElse (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+@[simp] theorem orElseDecrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.AllValid σ]
-  (p : SimpleParser σ τ α) (q : SimpleParser σ τ α) (hpr : respectsPosition _ _ p) (it : σ)
-  (hpd : decrementsRemainingOnSuccess _ _ p it) (hqd : decrementsRemainingOnSuccess _ _ q it)
-      : decrementsRemainingOnSuccess _ _ (p <|> q) it := by
+  (p : SimpleParser σ τ α) (q : SimpleParser σ τ α) (hpr : respectsPosition _ _ p)
+  (hpd : decrementsRemainingOnSuccess _ _ p) (hqd : decrementsRemainingOnSuccess _ _ q)
+      : decrementsRemainingOnSuccess _ _ (p <|> q) := by
   simp [decrementsRemainingOnSuccess]
   simp [respectsPosition] at hpr
   simp [decrementsRemainingOnSuccess] at hpd
   simp [decrementsRemainingOnSuccess] at hqd
   have h : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
-  intro rem h1 h2
-  simp [HOrElse.hOrElse, OrElse.orElse, bind, pure]
-  split
+  intro it rem h1 h2 h3
+  simp [HOrElse.hOrElse, OrElse.orElse, bind, pure] at h3
+  split at h3
   · grind
-  · rename_i s _ _
-    have := Stream.RespectsPosition.setPositionOfGetPositionEq it s (Stream.getPosition it)
-                (by grind) rfl (by have := hpr it (by grind); simp_all)
-    rw [this]
-    grind
+  · have := hpr it (by assumption)
+    split at this
+    · grind
+    · expose_names
+      exact hqd it rem h1 (by assumption) (by
+        have := Stream.RespectsPosition.setPositionOfGetPositionEq it s (Stream.getPosition it)
+              (by grind) rfl (by grind)
+        rw [this] at h3
+        grind)
 
 @[spec] theorem getPositionSpec [Parser.Stream σ τ] (it : σ)
     : ⦃⌜True⌝⦄
@@ -227,6 +307,39 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
   rw [hg]
   simp_all
 
+@[simp] theorem tokenMapRespectsPosition (σ τ α : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ]
+  [Stream.Next?OnEndOfInput σ τ] (test : τ → Option α)
+    : respectsPosition _ _ ((tokenMap test) : SimpleParser σ τ α) := by
+  dsimp [respectsPosition]
+  intro it rem h
+  cases remainingLtOrEq _ it
+  · have := tokenMapSpec _ _ it test (by simp_all)
+    simp [wp, Id.run] at this
+    grind
+  · have := tokenMapEndOfInputSpec _ _ it test (by grind)
+    simp [wp, Id.run] at this
+    have ⟨e, he⟩ := this
+    simp_all
+    intro _
+    exact Stream.RespectsPosition.isEquivalence.refl rem
+
+@[simp] theorem tokenMapDecrementsRemainingOnSuccessOnSuccess (σ τ α : Type) [Parser.Stream σ τ]
+  [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
+  [Stream.Next?OnInput σ τ] [Stream.Next?OnEndOfInput σ τ] (test : τ → Option α)
+    : decrementsRemainingOnSuccess _ _ ((tokenMap test) : SimpleParser σ τ α) := by
+  dsimp [decrementsRemainingOnSuccess]
+  and_intros
+  intro it rem _ h1
+  cases remainingLtOrEq _ it
+  · have := tokenMapSpec _ _ it test (by simp_all)
+    simp [wp, Id.run] at this
+    grind
+  · have := tokenMapEndOfInputSpec _ _ it test (by grind)
+    have ⟨e, he⟩ := this
+    dsimp [Id.run] at he
+    simp_all
+
 @[spec] theorem anyTokenSpec (σ τ : Type) [Parser.Stream σ τ]  [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ] (it : σ)
     : ⦃⌜0 < Stream.Remaining.remaining it⌝⦄
@@ -246,42 +359,23 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
   simp [anyToken, Id.run]
   exact tokenMapEndOfInputSpec _ _ it some (by grind)
 
-@[grind .] theorem remainingLtOrEq (σ : Type) [Stream.Remaining σ] (it : σ)
-    : 0 < Stream.Remaining.remaining it ∨ 0 = Stream.Remaining.remaining it := by
-  grind
-
 @[simp] theorem anyTokenRespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ]
   [Stream.Next?OnEndOfInput σ τ]
     : respectsPosition _ _ (anyToken : SimpleParser σ τ τ) := by
-  dsimp [respectsPosition]
-  intro it rem h
-  cases remainingLtOrEq _ it
-  · have := anyTokenSpec _ _ it (by simp_all)
-    simp [wp, Id.run] at this
-    grind
-  · have := anyTokenEndOfInputSpec _ _ it (by grind)
-    simp [wp, Id.run] at this
-    have ⟨e, he⟩ := this
-    simp_all
-    intro _
-    exact Stream.RespectsPosition.isEquivalence.refl rem
+  dsimp [respectsPosition, anyToken]
+  have := tokenMapRespectsPosition σ τ τ some
+  simp [respectsPosition] at this
+  grind
 
 @[simp] theorem anyTokenDecrementsRemainingOnSuccessOnSuccess (σ τ : Type) [Parser.Stream σ τ]
   [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
-  [Stream.Next?OnInput σ τ] [Stream.Next?OnEndOfInput σ τ] (it : σ)
-    : decrementsRemainingOnSuccess _ _ (anyToken : SimpleParser σ τ τ) it:= by
-  dsimp [decrementsRemainingOnSuccess]
-  and_intros
-  intro rem _ h1
-  cases remainingLtOrEq _ it
-  · have := anyTokenSpec _ _ it (by simp_all)
-    simp [wp, Id.run] at this
-    grind
-  · have := anyTokenEndOfInputSpec _ _ it (by grind)
-    have ⟨e, he⟩ := this
-    dsimp [Id.run] at he
-    simp_all
+  [Stream.Next?OnInput σ τ] [Stream.Next?OnEndOfInput σ τ]
+    : decrementsRemainingOnSuccess _ _ (anyToken : SimpleParser σ τ τ) := by
+  dsimp [decrementsRemainingOnSuccess, anyToken]
+  have := tokenMapDecrementsRemainingOnSuccessOnSuccess σ τ τ some
+  simp [decrementsRemainingOnSuccess] at this
+  grind
 
 @[spec] theorem lookAheadSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
@@ -447,14 +541,14 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
 
 @[simp] theorem withBacktrackingOfDecrementsRemaining [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
-  (p : SimpleParser σ τ α) (it : σ) (h : Stream.ValidPosition.valid it ∧ respectsPosition _ _ p
-        ∧ decrementsRemainingOnSuccess _ _ p it)
-    : decrementsRemainingOnSuccess _ _ (withBacktracking p) it := by
-  have := withBacktrackingSpec p it (by simp_all)
+  [Stream.AllValid σ] (p : SimpleParser σ τ α) (h : respectsPosition _ _ p
+        ∧ decrementsRemainingOnSuccess _ _ p)
+    : decrementsRemainingOnSuccess _ _ (withBacktracking p) := by
+  simp [decrementsRemainingOnSuccess]
+  intro it
+  have := withBacktrackingSpec p it (by and_intros; exact Stream.AllValid.valid it; grind)
   simp [wp, Id.run] at this
   simp [respectsPosition, decrementsRemainingOnSuccess] at h
-  simp [decrementsRemainingOnSuccess]
-  simp_all
   grind
 
 @[spec] theorem notFollowedBySpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
@@ -604,3 +698,76 @@ theorem endOfInputConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ] [S
       · simp_all
       · grind
     · simp_all
+
+@[spec] theorem withErrorMessageSpec [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
+  (p : SimpleParser σ τ α) (msg : String) (it : σ)
+    : ⦃⌜Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
+      withErrorMessage msg p it
+      ⦃post⟨fun r => ⌜match p it with
+                     | .ok rem a => r = .ok rem a
+                            ∧ Stream.RespectsPosition.respectsPosition τ it rem
+                     | .error _ _ => match r with | .ok _ _ => false | .error rem _ => true
+                            ∧ Stream.RespectsPosition.respectsPosition τ it rem⌝⟩⦄ := by
+  mintro _
+  simp [wp, withErrorMessage, tryCatch, tryCatchThe, MonadExceptOf.tryCatch, pure, Id.run,
+        bind, throwErrorWithMessage, throw, throwThe, MonadExceptOf.throw, ParserT.run]
+  intro hv hr
+  simp [respectsPosition] at hr
+  have hr := hr it (by grind)
+  split
+  · split <;> simp_all
+  · split
+    · expose_names
+      split at heq_1
+      · simp_all
+      · split at heq_1
+        · simp_all
+        · expose_names
+          have := getPositionResultEqOk s
+          simp_all
+    · expose_names
+      split at heq_1
+      · simp_all
+      · split at heq_1
+        · expose_names
+          have := Parser.getPositionSpec s (by simp)
+          simp [wp, Id.run] at this
+          rw [this] at heq_3
+          have := getPositionResultEqOk s
+          simp_all
+          have := Result.error.inj heq
+          have := Result.error.inj heq_1
+          have := Result.ok.inj heq_3
+          simp_all
+        · expose_names
+          have := getPositionResultEqOk s
+          simp_all
+
+@[simp] theorem withErrorMessageRespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
+  [Stream.AllValid σ] (p : SimpleParser σ τ α) (h : respectsPosition _ _ p) (msg : String)
+      : respectsPosition _ _ (withErrorMessage msg p) := by
+  simp [respectsPosition]
+  have h : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
+  intro it h
+  have hw := withErrorMessageSpec p msg it (by grind)
+  simp [wp, Id.run] at hw
+  split at hw
+  · simp_all
+  · split <;> simp_all
+
+@[simp] theorem withErrorMessageDecrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ]
+  [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
+  [Stream.SetPositionPrecondition σ τ]
+  [Stream.AllValid σ] (p : SimpleParser σ τ α) (msg : String)
+  (h : respectsPosition _ _ p ∧ decrementsRemainingOnSuccess _ _ p)
+      : decrementsRemainingOnSuccess _ _ (withErrorMessage msg p) := by
+  simp [decrementsRemainingOnSuccess]
+  have : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
+  intro it
+  have := withErrorMessageSpec p msg it (by grind)
+  simp [wp, Id.run] at this
+  simp [respectsPosition, decrementsRemainingOnSuccess] at h
+  simp_all
+  grind

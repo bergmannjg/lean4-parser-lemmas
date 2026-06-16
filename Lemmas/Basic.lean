@@ -29,6 +29,10 @@ class Stream.AllValid (σ : Type) [Stream.Remaining σ] [Stream.ValidPosition σ
 def Stream.decrementsRemaining [Stream.Remaining σ] (it rem : σ)
     := Stream.Remaining.remaining rem < Stream.Remaining.remaining it
 
+/-- remaining input of ```rem``` is less or equal than remaining input of ```it``` -/
+def Stream.notIncrementsRemaining [Stream.Remaining σ] (it rem : σ)
+    := Stream.Remaining.remaining rem ≤ Stream.Remaining.remaining it
+
 /-- Defines a relation of a stream type that enables the proof of 'no input is consumed'
   with the following steps
 
@@ -48,7 +52,7 @@ class Stream.RespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remai
     /-- respectsPosition is a equivalence relation -/
   isEquivalence : Equivalence respectsPosition
 
-/-- a parser consumes no input if the corresponding stream are equal -/
+/-- a parser consumes no input if the corresponding streams are equal -/
 def consumesNoInput (σ τ : Type) [Parser.Stream σ τ] (p : SimpleParser σ τ α)
     := ∀ it, (match (p it) with | .ok rem _ => rem | .error rem _ => rem) = it
 
@@ -59,10 +63,15 @@ def respectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ] 
                 → (match (p it) with | .ok rem _ => rem | .error rem _ => rem) = rem
                 → Stream.RespectsPosition.respectsPosition τ it rem
 
+/-- a parser not increments input on success if the corresponding streams not increment input  -/
+def notIncrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
+  [Stream.ValidPosition σ] (p : SimpleParser σ τ α)
+  := ∀ it rem a, Stream.ValidPosition.valid it → p it = .ok rem a → Stream.notIncrementsRemaining it rem
+
 /-- a parser decrements input on success if the corresponding streams decrement input  -/
 def decrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
-  [Stream.ValidPosition σ] (p : SimpleParser σ τ α) (it : σ)
-  := ∀ rem a, Stream.ValidPosition.valid it → p it = .ok rem a → Stream.decrementsRemaining it rem
+  [Stream.ValidPosition σ] (p : SimpleParser σ τ α)
+  := ∀ it rem a, Stream.ValidPosition.valid it → p it = .ok rem a → Stream.decrementsRemaining it rem
 
 /-- Defines the postcondition of Std.Stream.next? on a non empty stream with class Stream.RespectsPosition
  -/
@@ -73,8 +82,7 @@ class Stream.Next?OnInput (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining
                                   ∧ Stream.decrementsRemaining it rem
                                   ∧ Stream.RespectsPosition.respectsPosition τ it rem
 
-/-- Defines the postcondition of Std.Stream.next? on an empty stream
- -/
+/-- Defines the postcondition of Std.Stream.next? on an empty stream -/
 class Stream.Next?OnEndOfInput (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] where
   cond (it : σ) : Stream.ValidPosition.valid it
@@ -102,7 +110,7 @@ class Stream.SetPositionPrecondition (σ τ : Type) [Parser.Stream σ τ] [Strea
 /-- example with decrementsRemainingOnSuccess to prove termination -/
 def foldr'  (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.AllValid σ] (f : α → β → β) (p : SimpleParser σ τ α) (q : SimpleParser σ τ β)
-  (h : ∀ it, decrementsRemainingOnSuccess σ τ p it)
+  (h : decrementsRemainingOnSuccess σ τ p)
     : SimpleParser σ τ β := fun s => foldrAux s
 where
   /-- total recusirve function -/
