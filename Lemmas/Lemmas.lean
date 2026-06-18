@@ -268,23 +268,20 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
                         ∧ Stream.decrementsRemaining it rem
                         ∧ Stream.RespectsPosition.respectsPosition τ it rem))⌝⟩⦄ := by
   mintro _
-  simp [wp, tokenMap, tokenCore, Stream.next?, bind, getStream, setStream]
+  simp [wp, tokenMap, tokenCore, Stream.next?, bind, getStream, setStream, pure, Id.run]
   intro h
   have ⟨rem, ⟨c, hn⟩⟩ := @Stream.Next?OnInput.cond σ τ _ _ _ _ _ it h
   simp_all
   exact ⟨rem, by exact ⟨c, by
       split
-      · rename_i heq
-        rw [heq]
-        simp_all
-        rfl
+      · grind
       · rename_i heq
         rw [heq]
         simp
         and_intros
         · have := Parser.getPositionSpec rem (by simp)
           simp [wp, Id.run] at this
-          simp [throwUnexpected, bind, Id.run, throw, throwThe, MonadExceptOf.throw, pure]
+          simp [throwUnexpected, bind, throw, throwThe, MonadExceptOf.throw, pure]
           simp_all
         · grind
         · grind⟩⟩
@@ -297,7 +294,8 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
       ⦃post⟨fun r => ⌜∃ e, r = .error it e⌝⟩⦄ := by
   mintro _
   dsimp [wp, tokenMap, tokenCore, Stream.next?, bind, getStream, pure,
-    PredTrans.pure, PredTrans.apply, throwUnexpected, Id.run]
+    PredTrans.pure, PredTrans.apply, throwUnexpected, Id.run, throw, throwThe,
+    MonadExceptOf.throw]
   intro h
   have := @Stream.Next?OnEndOfInput.cond σ τ _ _ _ (by assumption) it h.left h.right
   rw [this]
@@ -413,7 +411,7 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
                 grind only
               · grind only
           · simp_all
-        · grind
+        · split at heq_2 <;> simp_all
       · grind
     · grind
   · rename_i heq
@@ -439,9 +437,14 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
               grind only
           · split at heq_2
             · expose_names
-              have := setPositionOfGetPositionEq it s_3
-                (by assumption) (by assumption) (by simp_all; grind)
-              grind only
+              split at heq_2
+              · simp_all
+              · expose_names
+                simp [throw, throwThe, MonadExceptOf.throw, pure] at heq_6
+                and_intros
+                · have := setPositionOfGetPositionEq s s_2 a (by grind) (by grind) (by grind)
+                  grind
+                · grind
             · expose_names
               have := setPositionOfGetPositionFalseIfRespectsPosition s_3 s_4 a
                             (by assumption) (by simp_all; grind)

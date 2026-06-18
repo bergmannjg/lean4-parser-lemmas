@@ -3,9 +3,14 @@ lintDriver = "batteries/runLinter"
 defaultTargets = ["Lemmas", "Example"]
 
 [[require]]
+name = "batteries"
+git = "https://github.com/leanprover-community/batteries"
+rev = "v4.31.0"
+
+[[require]]
 name = "Parser"
 git = "https://github.com/fgdorais/lean4-parser"
-rev = "1ae79584c208846a52d324fcfc5f62b5a30ce03f"
+rev = "cd89113d76385a95e0476200e9225dadec08b827"
 
 [[lean_lib]]
 name = "Lemmas"
