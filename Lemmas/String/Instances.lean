@@ -1,5 +1,15 @@
+module
+
 import Init.Meta
-import Parser
+
+import all Init.Data.String.Basic
+
+import all Parser.Basic
+import all Parser.Error
+import all Parser.Parser
+import all Parser.Prelude
+import all Parser.Stream
+
 import Std.Tactic.Do
 import Std.Tactic.Do.Syntax
 
@@ -32,13 +42,7 @@ private theorem slice!PosEq (s : String) (p₁ p₂ : s.Pos) (h : p₁.offset �
     : (String.slice! s p₁ p₂).startInclusive.offset = p₁.offset
       ∧ (String.slice! s p₁ p₂).endExclusive.offset = p₂.offset
       ∧ (String.slice! s p₁ p₂).str = s := by
-  have := @String.Slice.startInclusive_slice (String.toSlice s)
-              ⟨p₁.offset, by have := p₁.isValid; simp_all⟩
-              ⟨p₂.offset, by have := p₂.isValid; simp_all⟩
-              (by assumption)
-  have := String.Pos.ext_iff.mp this
-  dsimp [String.slice!]
-  rw [← @String.Slice.slice_eq_slice! s p₁.toSlice p₂.toSlice h]
+  rw [← @String.slice_eq_slice! s p₁ p₂ h]
   simp
 
 private theorem setPositionPrecondition (it : String.Slice) (pos : Stream.Position String.Slice)
@@ -52,14 +56,19 @@ private theorem setPositionPrecondition (it : String.Slice) (pos : Stream.Positi
             (by simp_all)
   generalize hg : (if h : String.Pos.Raw.IsValid it.str pos
       then it.str.slice! { offset := pos, isValid := by grind } it.endExclusive
-      else default) = s
+      else panicWithPosWithDecl "Parser.Stream" "Parser.Stream.instSliceChar" 80 6
+            "invalid position for string") = s
   and_intros
   · split at hg
-    · rw [← hg, this.left]
+    · have : (it.str.slice! { offset := pos, isValid := by grind } it.endExclusive).startInclusive.offset
+              = s.startInclusive.offset := by grind
+      simp_all
     · simp_all
   · simp_all
   · split at hg
-    · rw [← hg, this.right.left]
+    · have : (it.str.slice! { offset := pos, isValid := by grind } it.endExclusive).endExclusive.offset
+              = s.endExclusive.offset := by grind
+      simp_all
     · simp_all
 
 /-- no input is consumed if the position is reset after applying a respectful parser -/
@@ -75,12 +84,11 @@ private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : String.Sli
   split
   · have := slice!PosEq s2.str ⟨p, by grind⟩ ⟨s2.endExclusive.offset, s2.endExclusive.isValid⟩
             (by simp; rw [← h2.right, ← h1]; exact s1.startInclusive_le_endExclusive)
-    have := @String.Slice.ext
+    exact @String.Slice.ext
       (s2.str.slice! { offset := p, isValid := by grind } s2.endExclusive) s1
       (by simp_all)
       (by simp [String.Pos.cast, String.Pos.ext_iff]; simp_all)
       (by simp [String.Pos.cast, String.Pos.ext_iff]; simp_all)
-    simp_all
   · simp_all
 
 instance : Stream.RespectsPosition String.Slice Char where
@@ -147,15 +155,14 @@ private theorem startPosEqEndPosOfEq (it : String.Slice)
 
 private theorem sliceOfNextLt (it : String.Slice) (h : it.startPos ≠ it.endPos)
     : it.startInclusive.offset.byteIdx < (it.startPos.next h).str.offset.byteIdx := by
-  simp [String.Slice.Pos.str, String.Slice.Pos.get, String.decodeChar, Char.utf8Size]
+  simp [String.Slice.Pos.get, String.decodeChar, Char.utf8Size]
   grind
 
 private theorem next?SomeOfLt (it : String.Slice)
   (h : 0 < Stream.Remaining.remaining it)
     : ∃ rem c, Std.Stream.next? it = some (c, rem) ∧ Stream.decrementsRemaining it rem
                                   ∧ respectsPosition it rem := by
-  simp [Std.Stream.next?, String.Slice.front?, String.Slice.Pos.get?, String.Slice.drop,
-        String.Slice.Pos.nextn, String.Slice.sliceFrom, bind, Option.bind]
+  simp [Std.Stream.next?, String.Slice.front?, String.Slice.Pos.get?, bind, Option.bind]
   have := startPosNeEndPosOfLt it (by grind)
   simp at this
   split
@@ -166,6 +173,9 @@ private theorem next?SomeOfLt (it : String.Slice)
     · have := String.Pos.Raw.lt_iff.mpr (sliceOfNextLt it (by grind))
       simp_all [Stream.decrementsRemaining]
       have := Char.utf8Size_pos a
+      simp_all
+      rw [String.Slice.drop_eq_sliceFrom, String.Slice.Pos.nextn_add_one]
+      simp_all
       grind
 
 instance : Stream.Next?OnInput String.Slice Char where
@@ -173,8 +183,8 @@ instance : Stream.Next?OnInput String.Slice Char where
 
 private theorem next?None (it : String.Slice) (h : 0 = Stream.Remaining.remaining it)
     : Std.Stream.next? it = none := by
-  simp [Std.Stream.next?, String.Slice.front?, String.Slice.Pos.get?, String.Slice.drop,
-        String.Slice.Pos.nextn, String.Slice.sliceFrom, bind, Option.bind]
+  simp [Std.Stream.next?, String.Slice.front?, String.Slice.Pos.get?,
+        bind, Option.bind]
   split
   · rfl
   · rename_i heq

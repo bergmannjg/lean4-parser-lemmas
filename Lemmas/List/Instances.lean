@@ -1,7 +1,15 @@
-import Init.Meta
-import Parser
-import Std.Tactic.Do
-import Std.Tactic.Do.Syntax
+module
+
+public import Init.Meta
+
+import all Parser.Basic
+import all Parser.Error
+import all Parser.Parser
+import all Parser.Prelude
+import all Parser.Stream
+
+public import Std.Tactic.Do
+public import Std.Tactic.Do.Syntax
 
 import Lemmas.Lemmas
 

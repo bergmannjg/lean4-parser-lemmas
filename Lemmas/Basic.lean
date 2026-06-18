@@ -1,7 +1,11 @@
-import Init.Meta
-import Parser
+module
 
-open Lean Lean.Syntax Parser Parser.Char
+public import Init.Meta
+public import Parser
+
+open Lean Lean.Syntax Parser
+
+@[expose] public section
 
 namespace Parser
 

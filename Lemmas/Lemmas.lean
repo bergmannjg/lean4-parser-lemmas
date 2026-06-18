@@ -1,13 +1,23 @@
-import Init.Meta
-import Parser
-import Std.Tactic.Do
-import Std.Tactic.Do.Syntax
+module
 
-import Lemmas.Basic
+public import Init.Meta
+
+import all Parser.Basic
+import all Parser.Error
+import all Parser.Parser
+import all Parser.Prelude
+import all Parser.Stream
+
+public import Std.Tactic.Do
+public import Std.Tactic.Do.Syntax
+
+public import Lemmas.Basic
 
 open Lean Lean.Syntax Parser Parser.Char
 
 open Std.Do
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

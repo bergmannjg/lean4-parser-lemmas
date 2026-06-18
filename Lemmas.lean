@@ -1,9 +1,7 @@
-import Lemmas.Basic
-import Lemmas.Lemmas
-import Lemmas.String.Instances
-import Lemmas.Substring.Instances
-/- TODO:
-  Parser.Stream.OfList.setPosition.fwd and Parser.Stream.OfList.setPosition.rev
-  are not exposed if allowImportAll is set
-import Lemmas.List.Instances
--/
+module
+
+public import Lemmas.Basic
+public import Lemmas.Lemmas
+public import Lemmas.String.Instances
+public import Lemmas.Substring.Instances
+public import Lemmas.List.Instances
