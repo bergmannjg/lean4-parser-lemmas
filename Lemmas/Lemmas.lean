@@ -12,6 +12,7 @@ public import Std.Tactic.Do
 public import Std.Tactic.Do.Syntax
 
 public import Lemmas.Basic
+public import Lemmas.Instances
 
 open Lean Lean.Syntax Parser Parser.Char
 
@@ -207,37 +208,50 @@ theorem seqRightNotIncrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ
         rw [this] at h3
         grind)
 
-@[spec] theorem getPositionSpec [Parser.Stream σ τ] (it : σ)
-    : ⦃⌜True⌝⦄
-      (getPosition : SimpleParser σ τ (Stream.Position σ)) it
-      ⦃post⟨fun r => ⌜∃ pos, r = Result.ok it pos
-                        ∧ pos = Parser.Stream.getPosition it⌝⟩⦄ := by
-  mintro _
-  unfold wp Id.instWP Id.run getPosition Stream.getPosition
-    getStream pure Id.instMonad Applicative.toPure Monad.toApplicative
-    Functor.map instMonadParserT Applicative.toFunctor
-    bind pure Applicative.toPure
-  grind
+@[spec] theorem getStreamSpec [Parser.Stream σ τ] (it : σ)
+    : ⦃fun s => ⌜s = it⌝⦄
+      (getStream : SimpleParser σ τ σ)
+      ⦃post⟨fun s s' => ⌜s = it ∧ s' = it⌝, fun _ _ => ⌜False⌝⟩⦄ := by
+  mvcgen [getStream]
+  simp_all [wp, PredTrans.apply, Parser.run, pure]
 
-theorem getPositionResultEqOk [Parser.Stream σ τ] (it : σ)
-    : ∃ pos, (getPosition : SimpleParser σ τ (Stream.Position σ)) it = Result.ok it pos := by
-  have hg := getPositionSpec it (by simp)
-  simp [wp, Id.run] at hg
-  grind
+@[simp] theorem getStreamEq [Parser.Stream σ τ] (it : σ)
+    : (getStream : SimpleParser σ τ _) it = Result.ok it it := by
+  simp [getStream, pure]
+
+@[spec] theorem getPositionSpec [Parser.Stream σ τ] (it : σ)
+    : ⦃fun s => ⌜s = it⌝⦄
+      (getPosition : SimpleParser σ τ (Stream.Position σ))
+      ⦃post⟨fun pos s => ⌜s = it ∧ pos = Parser.Stream.getPosition it⌝, fun _ _ => ⌜False⌝⟩⦄ := by
+  mvcgen [getPosition] with grind
+
+theorem getPositionEq [Parser.Stream σ τ] (it : σ)
+    : (getPosition : SimpleParser σ τ _) it = Result.ok it (Stream.getPosition it) := by
+  have hg := getPositionSpec it (by assumption) (by simp)
+  simp [wp, PredTrans.apply, Parser.run] at hg
+  split at hg <;> grind
+
+@[spec] theorem setStreamSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
+  [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
+  (it : σ) (pos : Stream.Position σ)
+  : ⦃ ⌜Stream.SetPositionPrecondition.cond it pos⌝⦄
+    (setStream (Stream.setPosition it pos) : SimpleParser σ τ Unit)
+    ⦃post⟨fun _ s => ⌜pos = Parser.Stream.getPosition s
+                      ∧ Stream.RespectsPosition.respectsPosition τ it s⌝, fun _ _ => ⌜False⌝⟩⦄ := by
+  mvcgen [setStream]
+  intros
+  simp_all [wp, PredTrans.apply, Parser.run, pure]
+  have ⟨r, And.intro hs ⟨rem, hr⟩⟩ := Stream.SetPositionPrecondition.validResult it pos (by grind)
+  simp_all
 
 @[spec] theorem setPositionSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (it : σ) (pos : Stream.Position σ)
-  : ⦃⌜Stream.SetPositionPrecondition.cond it pos⌝⦄
-    (setPosition pos : SimpleParser σ τ Unit) it
-    ⦃post⟨fun r => ⌜∃ rem, r = Result.ok rem () ∧ pos = Parser.Stream.getPosition rem
-                           ∧ Stream.RespectsPosition.respectsPosition τ it rem⌝⟩⦄ := by
-  mintro _
-  intro h
-  simp at h
-  simp [wp, Id.run, setPosition, bind, getStream, setStream, pure]
-  have ⟨r, And.intro hs ⟨rem, hr⟩⟩ := Stream.SetPositionPrecondition.validResult it pos h
-  grind
+  : ⦃fun s => ⌜s = it ∧ Stream.SetPositionPrecondition.cond it pos⌝⦄
+    (setPosition pos : SimpleParser σ τ Unit)
+    ⦃post⟨fun _ s => ⌜pos = Parser.Stream.getPosition s
+                      ∧ Stream.RespectsPosition.respectsPosition τ it s⌝, fun _ _ => ⌜False⌝⟩⦄ := by
+  mvcgen [setPosition] with grind
 
 theorem setPositionOfGetPositionEq [Parser.Stream σ τ]
   [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
@@ -262,75 +276,79 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
     : False := by
   simp [setPosition, bind, getStream, setStream] at h
 
+@[simp] theorem throwUnexpectedOfSomeEq [Parser.Stream σ τ]
+    (α : Type) (s : σ) (c : τ)
+    : (throwUnexpected (some c) s
+        : Id (Parser.Result (Error.Simple σ τ) σ α))
+      = (Parser.Result.error s (Error.unexpected (Stream.getPosition s) (some c))
+        : Id (Parser.Result (Error.Simple σ τ) σ α)) := by
+  simp only [throwUnexpected, bind, throw, throwThe, MonadExceptOf.throw, pure]
+  have := getPositionEq s
+  rfl
+
+@[simp] theorem throwUnexpectedOfNoneEq [Parser.Stream σ τ]
+    (α : Type) (s : σ)
+    : (throwUnexpected none s
+        : Id (Parser.Result (Error.Simple σ τ) σ α))
+      = (Parser.Result.error s (Error.unexpected (Stream.getPosition s) none)
+        : Id (Parser.Result (Error.Simple σ τ) σ α)) := by
+  simp only [throwUnexpected, bind, throw, throwThe, MonadExceptOf.throw, pure]
+  have := getPositionEq s
+  rfl
+
 @[spec] theorem tokenMapSpec (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ]
+  [Stream.Next?OnEndOfInput σ τ]
   (it : σ) (test : τ → Option α)
-    : ⦃⌜0 < Stream.Remaining.remaining it⌝⦄
-      ((tokenMap test) : SimpleParser σ τ α) it
-      ⦃post⟨fun r => ⌜
-        ∃ (rem : σ), (∃ c,
-            (match test c with
-            | some a => r = Parser.Result.ok rem a
-                        ∧ Stream.decrementsRemaining it rem
-                        ∧ Stream.RespectsPosition.respectsPosition τ it rem
-            | none => (∃ (p : Stream.Position σ), p = Parser.Stream.getPosition rem
-                        ∧ r = Parser.Result.error rem (Parser.Error.unexpected p (some c)))
-                        ∧ Stream.decrementsRemaining it rem
-                        ∧ Stream.RespectsPosition.respectsPosition τ it rem))⌝⟩⦄ := by
-  mintro _
-  simp [wp, tokenMap, tokenCore, Stream.next?, bind, getStream, setStream, pure, Id.run]
-  intro h
-  have ⟨rem, ⟨c, hn⟩⟩ := @Stream.Next?OnInput.cond σ τ _ _ _ _ _ it h
-  simp_all
-  exact ⟨rem, by exact ⟨c, by
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it⌝⦄
+      ((tokenMap test) : SimpleParser σ τ α)
+      ⦃post⟨fun a s => ⌜
+              0 < Stream.Remaining.remaining it
+              ∧ (∃ c, test c = some a)
+              ∧ Stream.decrementsRemaining it s
+              ∧ Stream.RespectsPosition.respectsPosition τ it s⌝,
+           fun e s => ⌜
+              if 0 < Stream.Remaining.remaining it then
+                (∃ c p, test c = none ∧ p = Parser.Stream.getPosition s
+                        ∧ e = Parser.Error.unexpected p (some c))
+                ∧ Stream.decrementsRemaining it s
+                ∧ Stream.RespectsPosition.respectsPosition τ it s
+              else s = it
+                   ∧ e = Parser.Error.unexpected (Stream.getPosition s) none
+                   ∧ Stream.RespectsPosition.respectsPosition τ it s⌝⟩⦄ := by
+  cases remainingLtOrEq _ it
+  · mvcgen [tokenMap]
+    simp [wp, tokenCore, Stream.next?, bind, setStream, pure, PredTrans.apply, Parser.run]
+    have ⟨rem, ⟨c, hn⟩⟩ := @Stream.Next?OnInput.cond σ τ _ _ _ _ _ it (by grind)
+    split
+    · rename_i a _
       split
-      · grind
-      · rename_i heq
-        rw [heq]
-        simp
-        and_intros
-        · have := Parser.getPositionSpec rem (by simp)
-          simp [wp, Id.run] at this
-          simp [throwUnexpected, bind, throw, throwThe, MonadExceptOf.throw, pure]
-          simp_all
+      · simp_all
+        cases h : test a.down
+        · simp_all
         · grind
-        · grind⟩⟩
-
-@[spec] theorem tokenMapEndOfInputSpec (σ τ : Type) [Parser.Stream σ τ]  [Stream.Remaining σ]
-  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ][Stream.Next?OnEndOfInput σ τ]
-  (it : σ) (test : τ → Option α)
-    : ⦃⌜ Stream.ValidPosition.valid it ∧ 0 = Stream.Remaining.remaining it⌝⦄
-      ((tokenMap test) : SimpleParser σ τ α) it
-      ⦃post⟨fun r => ⌜∃ e, r = .error it e⌝⟩⦄ := by
-  mintro _
-  dsimp [wp, tokenMap, tokenCore, Stream.next?, bind, getStream, pure,
-    PredTrans.pure, PredTrans.apply, throwUnexpected, Id.run, throw, throwThe,
-    MonadExceptOf.throw]
-  intro h
-  have := @Stream.Next?OnEndOfInput.cond σ τ _ _ _ (by assumption) it h.left h.right
-  rw [this]
-  simp_all
-  have hg := getPositionSpec it (by simp)
-  simp [wp, Id.run] at hg
-  rw [hg]
-  simp_all
+      · simp_all
+        cases h : test a.down
+        · simp_all
+          grind
+        · simp_all
+    · simp_all
+  · mvcgen (config := { stepLimit := some 1 }) -- exclude tokenMapSpec
+    intros
+    dsimp [wp, tokenMap, tokenCore, Stream.next?, bind, getStream, pure,
+      PredTrans.pure, PredTrans.apply, throwUnexpected, Id.run, throw, throwThe,
+      MonadExceptOf.throw, Parser.run]
+    have := @Stream.Next?OnEndOfInput.cond σ τ _ _ _ (by assumption) it (by grind) (by grind)
+    simp_all [getPositionEq]
+    exact Stream.RespectsPosition.isEquivalence.refl it
 
 @[simp] theorem tokenMapRespectsPosition (σ τ α : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ]
   [Stream.Next?OnEndOfInput σ τ] (test : τ → Option α)
     : respectsPosition _ _ ((tokenMap test) : SimpleParser σ τ α) := by
   dsimp [respectsPosition]
-  intro it rem h
-  cases remainingLtOrEq _ it
-  · have := tokenMapSpec _ _ it test (by simp_all)
-    simp [wp, Id.run] at this
-    grind
-  · have := tokenMapEndOfInputSpec _ _ it test (by grind)
-    simp [wp, Id.run] at this
-    have ⟨e, he⟩ := this
-    simp_all
-    intro _
-    exact Stream.RespectsPosition.isEquivalence.refl rem
+  intro it s hv heq
+  grind [SimpleParser.of_wp_eq (tokenMap test) (tokenMapSpec _ _ it test) it (by grind)]
 
 @[simp] theorem tokenMapDecrementsRemainingOnSuccessOnSuccess (σ τ α : Type) [Parser.Stream σ τ]
   [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
@@ -339,33 +357,22 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
   dsimp [decrementsRemainingOnSuccess]
   and_intros
   intro it rem _ h1
-  cases remainingLtOrEq _ it
-  · have := tokenMapSpec _ _ it test (by simp_all)
-    simp [wp, Id.run] at this
-    grind
-  · have := tokenMapEndOfInputSpec _ _ it test (by grind)
-    have ⟨e, he⟩ := this
-    dsimp [Id.run] at he
-    simp_all
+  grind [SimpleParser.of_wp_eq (tokenMap test) (tokenMapSpec _ _ it test) it (by grind)]
 
 @[spec] theorem anyTokenSpec (σ τ : Type) [Parser.Stream σ τ]  [Stream.Remaining σ] [Stream.ValidPosition σ]
-  [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ] (it : σ)
-    : ⦃⌜0 < Stream.Remaining.remaining it⌝⦄
-      (anyToken : SimpleParser σ τ τ) it
-      ⦃post⟨fun r => ⌜∃ rem, (∃ c, r = Parser.Result.ok rem c ∧ Stream.decrementsRemaining it rem
-                                    ∧ Stream.RespectsPosition.respectsPosition τ it rem)⌝⟩⦄ := by
-  mvcgen [anyToken]
-
-@[spec] theorem anyTokenEndOfInputSpec (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
-  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.Next?OnEndOfInput σ τ] (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ 0 = Stream.Remaining.remaining it⌝⦄
-      (anyToken : SimpleParser σ τ τ) it
-      ⦃post⟨fun r => ⌜∃ e, r = .error it e⌝⟩⦄ := by
+  [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ] [Stream.Next?OnEndOfInput σ τ] (it : σ)
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it⌝⦄
+      (anyToken : SimpleParser σ τ τ)
+      ⦃post⟨fun _ s => ⌜0 < Stream.Remaining.remaining it
+                       ∧ Stream.decrementsRemaining it s
+                       ∧ Stream.RespectsPosition.respectsPosition τ it s⌝,
+           fun _ _ => ⌜0 = Stream.Remaining.remaining it⌝⟩⦄ := by
+  simp only [anyToken]
   mintro _
-  simp [wp]
-  intro h1 h2
-  simp [anyToken, Id.run]
-  exact tokenMapEndOfInputSpec _ _ it some (by grind)
+  mspec tokenMapSpec
+  · grind
+  · simp_all
+  · simp_all
 
 @[simp] theorem anyTokenRespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ]
@@ -388,78 +395,47 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
 @[spec] theorem lookAheadSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (p : SimpleParser σ τ α) (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ respectsPosition _ _ p⌝⦄
-      lookAhead p it
-      ⦃post⟨fun r => ⌜match r with
-                     | .ok rem a => it = rem ∧ ∃ rem', p it = Result.ok rem' a
-                     | .error rem e => it = rem ∧ ∃ rem', p it = Result.error rem' e⌝⟩⦄ := by
-  mintro _
-  simp [wp, lookAhead, bind, tryCatch, tryCatchThe, MonadExceptOf.tryCatch, bind, ParserT.run,
-          Id.run, pure]
-  intro hv hp
-  simp [respectsPosition] at hp
-  have hp := hp it hv
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it ∧ respectsPosition _ _ p⌝⦄
+      lookAhead p
+      ⦃post⟨fun a s => ⌜it = s ∧ ∃ s', p it = Result.ok s' a⌝,
+           fun e s => ⌜it = s ∧ ∃ s', p it = Result.error s' e⌝⟩⦄ := by
+  mvcgen [lookAhead]
+  simp [wp, bind, MonadExceptOf.tryCatch, bind, PredTrans.apply, ParserT.run,  Parser.run,
+        throw, throwThe, MonadExceptOf.throw, pure]
+  expose_names
+  simp [respectsPosition] at h
   split
-  · rename_i heq
-    split at heq
-    · rename_i s a heq_1
-      have := getPositionSpec it (by simp)
-      simp [wp, Id.run] at this
+  · split
+    · expose_names
       split at heq
-      · rename_i heq_2
+      · expose_names
         split at heq_2
-        · simp_all
-          rename_i heq_3
-          split at heq_3
-          · rename_i s_3 _ _
-            have := Result.ok.inj heq_3
-            split at heq
-            · split at heq_3 <;> simp_all
-            · split at heq_3
-              · expose_names
-                have := setPositionOfGetPositionEq it s_3 a
-                grind only
-              · grind only
-          · simp_all
-        · split at heq_2 <;> simp_all
-      · grind
-    · grind
-  · rename_i heq
-    split at heq
-    · rename_i a heq_1
-      have := getPositionSpec it (by simp)
-      simp [wp, Id.run] at this
-      split at heq
-      · rename_i heq_2
-        split at heq_2 <;> grind
-      · rename_i heq_2
-        split at heq_2
+        · expose_names
+          grind [setPositionOfGetPositionEq it s_3 (Stream.getPosition it)
+                        (by grind) (by simp [getPositionEq]) (by grind)]
         · grind
-        · rename_i s_2 _ heq_3
-          expose_names
-          split at heq_3
-          · rename_i s_3 _ _
-            split at heq_3
-            · grind
-            · expose_names
-              have := setPositionOfGetPositionFalseIfRespectsPosition s_3 s_4 a
-                            (by assumption) (by simp_all)
-              grind only
-          · split at heq_2
-            · expose_names
-              split at heq_2
-              · simp_all
-              · expose_names
-                simp [throw, throwThe, MonadExceptOf.throw, pure] at heq_6
-                and_intros
-                · have := setPositionOfGetPositionEq s s_2 a (by grind) (by grind) (by grind)
-                  grind
-                · grind
-            · expose_names
-              have := setPositionOfGetPositionFalseIfRespectsPosition s_3 s_4 a
-                            (by assumption) (by simp_all; grind)
-              grind only
-    · grind [getPositionResultEqOk it]
+      · expose_names
+        split at heq_2
+        · split at heq_2
+          · grind
+          · expose_names
+            grind [setPositionOfGetPositionFalseIfRespectsPosition s_3 s_4]
+        · split at heq <;> simp_all
+    · grind
+  · expose_names
+    split at heq
+    · simp_all
+    · split at heq
+      · expose_names
+        split at heq_1
+        · split at heq_1
+          · simp_all
+          · expose_names
+            grind [setPositionOfGetPositionFalseIfRespectsPosition s_4 s_5]
+        · grind [setPositionOfGetPositionEq it s_2 (Stream.getPosition it)
+                        (by grind) (by simp [getPositionEq]) (by grind)]
+      · expose_names
+        grind [setPositionOfGetPositionFalseIfRespectsPosition s_2 s_3]
 
 @[simp] theorem lookAheadConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
@@ -468,89 +444,55 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
     : consumesNoInput _ _ (lookAhead p) := by
   simp [consumesNoInput]
   intro it
-  have := lookAheadSpec p it (by and_intros; exact Stream.AllValid.valid it; grind)
-  simp [wp, Id.run] at this
+  have := SimpleParser.of_wp_eq (lookAhead p) (lookAheadSpec p it) it (by
+    simp_all
+    exact Stream.AllValid.valid it)
   grind
 
 @[spec] theorem peekSpec [Parser.Stream σ τ]  [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ] [Stream.Next?OnEndOfInput σ τ]
   [Stream.SetPositionPrecondition σ τ] (it : σ)
-    : ⦃⌜0 < Stream.Remaining.remaining it⌝⦄
-      (peek : SimpleParser σ τ τ) it
-      ⦃post⟨fun r => ⌜∃ c, r = Parser.Result.ok it c⌝⟩⦄ := by
-  mintro _
-  intro h
-  mvcgen [peek]
-  · simp [respectsPosition]
-    and_intros
-    · exact Stream.ValidPosition.validOfRemaining it h
-    · intro it
-      have := anyTokenRespectsPosition σ τ it
-      grind
-  · have ht := anyTokenSpec _ _ it h
-    simp [wp, Id.run] at ht
-    grind
-
-@[spec] theorem peekEndOfInputSpec [Parser.Stream σ τ]  [Stream.Remaining σ] [Stream.ValidPosition σ]
-  [Stream.RespectsPosition σ τ] [Stream.Next?OnInput σ τ] [Stream.Next?OnEndOfInput σ τ]
-  [Stream.SetPositionPrecondition σ τ] (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ 0 = Stream.Remaining.remaining it⌝⦄
-      (peek : (SimpleParser  σ τ) τ) it
-      ⦃post⟨fun r => ⌜∃ e, r = Parser.Result.error it e⌝⟩⦄ := by
-  mintro _
-  intro h
-  have ht := anyTokenEndOfInputSpec _ _ it (by grind)
-  simp [wp, Id.run] at ht
-  simp [wp, Id.run]
-  have := lookAheadSpec anyToken it (by
-    and_intros
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it⌝⦄
+      (peek : SimpleParser σ τ τ)
+      ⦃post⟨fun _ s => ⌜s = it ∧ 0 < Stream.Remaining.remaining it⌝,
+           fun _ s => ⌜s = it ∧ 0 = Stream.Remaining.remaining it⌝⟩⦄ := by
+  cases remainingLtOrEq _ it
+  · mvcgen [peek]
     · simp_all
-    · exact anyTokenRespectsPosition σ τ)
-  simp [wp, Id.run] at this
-  grind
+    · grind
+    · grind [SimpleParser.of_wp_eq (anyToken) (anyTokenSpec _ _ it) it (by
+                simp_all [Stream.ValidPosition.validOfRemaining it (by grind)])]
+  · mvcgen [peek]
+    · simp_all
+    · grind [SimpleParser.of_wp_eq (anyToken) (anyTokenSpec _ _ it) it (by simp_all)]
+    · grind
 
 @[spec] theorem withBacktrackingSpec [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (p : SimpleParser σ τ α) (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
-      withBacktracking p it
-      ⦃post⟨fun r => ⌜match r with
-                     | .ok rem a => p it = .ok rem a
-                        ∧ Stream.RespectsPosition.respectsPosition τ it rem
-                     | .error it e => ∃ rem, p it = .error rem e⌝⟩⦄ := by
-  mintro _
-  simp [wp,withBacktracking, Id.run, tryCatch, tryCatchThe, MonadExceptOf.tryCatch, bind,
-        ParserT.run, pure, throw, respectsPosition]
-  intro _ _
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
+      withBacktracking p
+      ⦃post⟨fun a s => ⌜p it = .ok s a ∧ Stream.RespectsPosition.respectsPosition τ it s⌝,
+           fun e s => ⌜s = it ∧ ∃ s', p it = .error s' e⌝⟩⦄ := by
+  mvcgen [withBacktracking]
+  simp [wp, bind, MonadExceptOf.tryCatch, bind, PredTrans.apply, ParserT.run, Parser.run,
+        throw, throwThe, MonadExceptOf.throw, pure]
+  expose_names
+  simp [respectsPosition] at h
   split
   · expose_names
     split at heq
-    · expose_names
-      split at heq
-      · have := getPositionSpec it (by simp)
-        simp [wp, Id.run] at this
-        grind
-      · split at heq <;> simp_all
     · grind
+    · split at heq <;> simp_all
   · expose_names
     split at heq
+    · simp_all
     · split at heq
-      · grind
       · expose_names
-        have := getPositionSpec it (by simp)
-        simp [wp, Id.run] at this
-        split at heq
-        · expose_names
-          have := Result.error.inj heq
-          have := setPositionOfGetPositionEq it s_1
-                  (by assumption) (by assumption) (by grind)
-          exact ⟨s_1, by grind⟩
-        · expose_names
-          have := Parser.setPositionOfGetPositionFalseIfRespectsPosition s_1 s_2 a
-                            (by assumption) (by grind)
-          grind
-    · have := getPositionResultEqOk it
-      grind
+        grind [setPositionOfGetPositionEq s s_2 r
+                  (by grind) (by simp_all [getPositionEq]) (by grind)]
+      · expose_names
+        grind [setPositionOfGetPositionFalseIfRespectsPosition s_2 s_3]
 
 @[simp] theorem withBacktrackingOfDecrementsRemaining [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
@@ -559,59 +501,25 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
     : decrementsRemainingOnSuccess _ _ (withBacktracking p) := by
   simp [decrementsRemainingOnSuccess]
   intro it
-  have := withBacktrackingSpec p it (by and_intros; exact Stream.AllValid.valid it; grind)
-  simp [wp, Id.run] at this
+  have := SimpleParser.of_wp_eq (withBacktracking p) (withBacktrackingSpec p it) it (by
+            simp_all
+            exact Stream.AllValid.valid it)
   simp [respectsPosition, decrementsRemainingOnSuccess] at h
   grind
 
 @[spec] theorem notFollowedBySpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (p : SimpleParser  σ τ α) (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
-      notFollowedBy p it
-      ⦃post⟨fun r => ⌜match p it with
-                     | .ok _ _ => ∃ e, r = .error it e
-                     | .error _ _ => r = .ok it ()⌝⟩⦄ := by
-  mintro _
-  simp [wp, notFollowedBy, Id.run, tryCatch, tryCatchThe, MonadExceptOf.tryCatch, bind,
-    ParserT.run, pure, throwUnexpected, throw, throwThe, MonadExceptOf.throw]
-  intro h1 h2
-  have ha := lookAheadSpec p it (by and_intros <;> simp_all)
-  simp [wp, Id.run] at ha
-  split
-  · split
-    · expose_names
-      split at heq_1
-      · expose_names
-        split at heq_2
-        · expose_names
-          simp_all
-          split
-          · expose_names
-            split
-            · expose_names
-              have := Result.ok.inj heq_2
-              have := getPositionSpec it (by simp)
-              simp [wp, Id.run] at this
-              simp_all
-            · have := getPositionResultEqOk s
-              simp_all
-          · grind
-        · split
-          · split <;> simp_all
-          · simp_all
-      · split
-        · split
-          · expose_names
-            have := Result.ok.inj heq_1
-            have := getPositionSpec it (by simp)
-            simp [wp, Id.run] at this
-            simp_all
-          · have := getPositionResultEqOk s
-            simp_all
-        · grind
-    · grind
-  · grind
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
+      notFollowedBy p
+      ⦃post⟨fun _ s  => ⌜s = it ∧ ∃ e s', p it = .error s' e⌝,
+           fun _ s  => ⌜s = it ∧ ∃ a s', p it = .ok s' a⌝⟩⦄ := by
+  mvcgen [notFollowedBy]
+  simp only [wp, bind, MonadExceptOf.tryCatch, PredTrans.apply, ParserT.run, Parser.run, pure]
+  have := SimpleParser.of_wp_eq (lookAhead p) (lookAheadSpec p it) it (by simp_all)
+  simp at this
+  simp_all
+  grind
 
 @[simp] theorem notFollowedByConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
@@ -620,38 +528,21 @@ theorem setPositionOfGetPositionFalseIfRespectsPosition  [Parser.Stream σ τ]
     : consumesNoInput _ _ (notFollowedBy p) := by
   simp [consumesNoInput]
   intro it
-  have := notFollowedBySpec p it (by and_intros; exact Stream.AllValid.valid it; grind)
-  simp [wp, Id.run] at this
+  have := SimpleParser.of_wp_eq (notFollowedBy p) (notFollowedBySpec p it) it (by
+    simp_all
+    exact Stream.AllValid.valid it)
   grind
 
 @[spec] theorem endOfInputSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ] [Stream.Next?OnInput σ τ]
   [Stream.Next?OnEndOfInput σ τ] (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it⌝⦄
-      (endOfInput : SimpleParser  σ τ Unit) it
-      ⦃post⟨fun r => ⌜if 0 < Stream.Remaining.remaining it
-                      then ∃ e, r = .error it e
-                      else r = .ok it ()⌝⟩⦄ := by
-  mintro _
-  intro h
-  split
-  · have ht := anyTokenSpec _ _ it (by grind only [= SPred.down_pure])
-    simp [wp, Id.run] at ht
-    mvcgen [endOfInput]
-    . and_intros
-      · grind
-      · intro it
-        have := anyTokenRespectsPosition σ τ it
-        grind
-    . split <;> grind
-  · have ht := anyTokenEndOfInputSpec _ _ it (by grind only [= SPred.down_pure])
-    simp [wp, Id.run] at ht
-    mvcgen [endOfInput]
-    · and_intros
-      · simp_all
-      · exact anyTokenRespectsPosition σ τ
-    · expose_names
-      split <;> simp_all
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it⌝⦄
+      (endOfInput : SimpleParser  σ τ Unit)
+      ⦃post⟨fun _ s => ⌜s = it ∧ 0 = Stream.Remaining.remaining s⌝,
+           fun _ s => ⌜s = it ∧ 0 < Stream.Remaining.remaining it⌝⟩⦄ := by
+  mvcgen [endOfInput]
+  simp_all
+  all_goals have := SimpleParser.of_wp_eq (anyToken) (anyTokenSpec _ _ it) it (by grind); grind
 
 theorem endOfInputConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ] [Stream.Next?OnInput σ τ]
@@ -659,103 +550,76 @@ theorem endOfInputConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ] [S
     : consumesNoInput _ _ (endOfInput : SimpleParser  σ τ Unit) := by
   simp [consumesNoInput]
   intro it
-  have := endOfInputSpec it (by and_intros; exact Stream.AllValid.valid it)
-  simp [wp, Id.run] at this
+  have := SimpleParser.of_wp_eq endOfInput (endOfInputSpec it) it (by
+    simp_all
+    exact Stream.AllValid.valid it)
   grind
+
+--      ⦃post⟨fun r => ⌜match p it with
+--                     | .ok rem x => r = .ok rem (Sum.inl x)
+--                                          ∧ Stream.RespectsPosition.respectsPosition τ it rem
+--                     | .error _ e => r = .ok it (Sum.inr e)⌝⟩⦄ := by
 
 @[spec] theorem eoptionSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (p : SimpleParser σ τ α) (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ respectsPosition _ _ p⌝⦄
-      eoption p it
-      ⦃post⟨fun r => ⌜match p it with
-                     | .ok rem x => r = .ok rem (Sum.inl x)
-                                          ∧ Stream.RespectsPosition.respectsPosition τ it rem
-                     | .error _ e => r = .ok it (Sum.inr e)⌝⟩⦄ := by
-  mintro _
-  simp [wp, eoption, bind, pure, Id.run, respectsPosition]
-  intro hv hp
-  split
-  · split <;> grind
-  · split
-    · grind
-    · rename_i rem _ _
-      simp_all
-      and_intros
-      · generalize hg : Stream.getPosition it = p
-        exact Parser.Stream.RespectsPosition.setPositionOfGetPositionEq it rem p hv hg (by grind)
-      · grind
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it ∧ respectsPosition _ _ p⌝⦄
+      eoption p
+      ⦃post⟨fun a s => ⌜match p it with
+                       | .ok rem x => s = rem ∧ a = (Sum.inl x)
+                                    ∧ Stream.RespectsPosition.respectsPosition τ it rem
+                       | .error rem e => a = Sum.inr e
+                                    ∧ Stream.RespectsPosition.respectsPosition τ it rem⌝,
+          fun _ _ => ⌜False⌝⟩⦄ := by
+  mvcgen [eoption]
+  simp [wp, bind, pure, respectsPosition, PredTrans.apply, Parser.run]
+  grind
 
 @[spec] theorem optionalSpec [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (p : SimpleParser σ τ α) (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ respectsPosition _ _ p⌝⦄
-      optional p it
-      ⦃post⟨fun r => ⌜match p it with
-                     | .ok rem _ => r = .ok rem ()
-                                      ∧ Stream.RespectsPosition.respectsPosition τ it rem
-                     | .error _ _ => r = .ok it ()⌝⟩⦄ := by
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it ∧ respectsPosition _ _ p⌝⦄
+      optional p
+      ⦃post⟨fun _ s => ⌜match p it with
+                     | .ok rem a => s = rem
+                                    ∧ p it = Result.ok rem a
+                                    ∧ Stream.RespectsPosition.respectsPosition τ it rem
+                     | .error _ _ => True⌝,
+          fun _ _ => ⌜False⌝⟩⦄ := by
   mvcgen [optional]
-  simp [wp, Id.run, SeqRight.seqRight, bind, pure]
-  intro hv hr
-  have he := eoptionSpec p it (by simp_all)
-  simp [wp, Id.run] at he
+  intros
+  have := SimpleParser.of_wp_eq (eoption p) (eoptionSpec p it) it (by simp_all)
+  simp [wp, SeqRight.seqRight, PredTrans.apply, Parser.run, bind, pure]
   split
   · split
-    · split at he
-      · grind
-      · simp_all
-    · simp_all
-  · split
-    · split at he
-      · simp_all
-      · grind
-    · simp_all
+    · expose_names
+      split at heq <;> grind
+    · expose_names
+      split at heq <;> grind
+  · grind
 
 @[spec] theorem withErrorMessageSpec [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
   (p : SimpleParser σ τ α) (msg : String) (it : σ)
-    : ⦃⌜Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
-      withErrorMessage msg p it
-      ⦃post⟨fun r => ⌜match p it with
-                     | .ok rem a => r = .ok rem a
-                            ∧ Stream.RespectsPosition.respectsPosition τ it rem
-                     | .error _ _ => match r with | .ok _ _ => false | .error rem _ => true
-                            ∧ Stream.RespectsPosition.respectsPosition τ it rem⌝⟩⦄ := by
-  mintro _
-  simp [wp, withErrorMessage, tryCatch, tryCatchThe, MonadExceptOf.tryCatch, pure, Id.run,
-        bind, throwErrorWithMessage, throw, throwThe, MonadExceptOf.throw, ParserT.run]
-  intro hv hr
-  simp [respectsPosition] at hr
-  have hr := hr it (by grind)
+    : ⦃fun s => ⌜s = it ∧ Stream.ValidPosition.valid it ∧ Parser.respectsPosition _ _ p⌝⦄
+      withErrorMessage msg p
+      ⦃post⟨fun a s => ⌜(∃ rem, p it = .ok rem a ∧ s = rem)
+                        ∧ Stream.RespectsPosition.respectsPosition τ it s⌝,
+           fun _ s => ⌜Stream.RespectsPosition.respectsPosition τ it s⌝⟩⦄ := by
+  mvcgen [withErrorMessage]
+  simp [wp, MonadExceptOf.tryCatch, pure,
+        bind, throwErrorWithMessage, throw, throwThe, MonadExceptOf.throw, PredTrans.apply,
+        Parser.run, ParserT.run]
+  expose_names
+  simp [respectsPosition] at h
   split
-  · split <;> simp_all
-  · split
-    · expose_names
-      split at heq_1
-      · simp_all
-      · split at heq_1
-        · simp_all
-        · expose_names
-          have := getPositionResultEqOk s
-          simp_all
-    · expose_names
-      split at heq_1
-      · simp_all
-      · split at heq_1
-        · expose_names
-          have := Parser.getPositionSpec s (by simp)
-          simp [wp, Id.run] at this
-          rw [this] at heq_3
-          have := getPositionResultEqOk s
-          simp_all
-          have := Result.error.inj heq
-          have := Result.error.inj heq_1
-          have := Result.ok.inj heq_3
-          simp_all
-        · expose_names
-          have := getPositionResultEqOk s
-          simp_all
+  · expose_names
+    split at heq
+    · simp_all
+      grind
+    · simp_all [getPositionEq]
+  · expose_names
+    split at heq <;> grind [getPositionEq]
 
 @[simp] theorem withErrorMessageRespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
   [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] [Stream.SetPositionPrecondition σ τ]
@@ -764,11 +628,8 @@ theorem endOfInputConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ] [S
   simp [respectsPosition]
   have h : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
   intro it h
-  have hw := withErrorMessageSpec p msg it (by grind)
-  simp [wp, Id.run] at hw
-  split at hw
-  · simp_all
-  · split <;> simp_all
+  have := SimpleParser.of_wp_eq (withErrorMessage msg p) (withErrorMessageSpec p msg it) it (by simp_all)
+  grind
 
 @[simp] theorem withErrorMessageDecrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ]
   [Stream.Remaining σ] [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
@@ -777,10 +638,8 @@ theorem endOfInputConsumesNoInput [Parser.Stream σ τ] [Stream.Remaining σ] [S
   (h : respectsPosition _ _ p ∧ decrementsRemainingOnSuccess _ _ p)
       : decrementsRemainingOnSuccess _ _ (withErrorMessage msg p) := by
   simp [decrementsRemainingOnSuccess]
+  simp [decrementsRemainingOnSuccess] at h
   have : ∀ (it : σ), Stream.ValidPosition.valid it := Stream.AllValid.valid
   intro it
-  have := withErrorMessageSpec p msg it (by grind)
-  simp [wp, Id.run] at this
-  simp [respectsPosition, decrementsRemainingOnSuccess] at h
-  simp_all
+  have := SimpleParser.of_wp_eq (withErrorMessage msg p) (withErrorMessageSpec p msg it) it (by simp_all)
   grind

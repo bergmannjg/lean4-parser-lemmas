@@ -115,12 +115,12 @@ class Stream.SetPositionPrecondition (σ τ : Type) [Parser.Stream σ τ] [Strea
 def foldr'  (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ]
   [Stream.AllValid σ] (f : α → β → β) (p : SimpleParser σ τ α) (q : SimpleParser σ τ β)
   (h : decrementsRemainingOnSuccess σ τ p)
-    : SimpleParser σ τ β := fun s => foldrAux s
+    : SimpleParser σ τ β := foldrAux
 where
-  /-- total recusirve function -/
+  /-- total recursive function -/
   foldrAux (s : σ) : Id (Parser.Result (Parser.Error.Simple σ τ) σ β) :=
     let savePos := Stream.getPosition s
-    match _: p s with
+    match _ : p s with
     | .ok s' x =>
       have : Stream.Remaining.remaining s' < Stream.Remaining.remaining s := by
         simp [decrementsRemainingOnSuccess] at h

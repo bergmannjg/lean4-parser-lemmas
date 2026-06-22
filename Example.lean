@@ -1,6 +1,12 @@
-import Init.Meta
-import Parser
-import Lemmas
+module
+
+public import Init.Meta
+import all Parser.Basic
+import all Parser.Error
+import all Parser.Parser
+import all Parser.Prelude
+import all Parser.Stream
+public import Lemmas
 
 open Lean Lean.Syntax Parser Parser.Char
 
@@ -13,8 +19,13 @@ abbrev TestParser := SimpleParser String.Slice Char
 inductive Ast where
 | pure : Char → Ast
 | cons : Char → Ast → Ast
-deriving Repr, Inhabited
+deriving Repr
 
+/-- -/
+instance : Inhabited Ast where
+  default := .pure default
+
+/-- -/
 instance : ToString Ast :=
   let rec pp : Ast → String
   | .pure e => toString e

@@ -2,8 +2,6 @@ module
 
 import Init.Meta
 
-import all Init.Data.String.Basic
-
 import all Parser.Basic
 import all Parser.Error
 import all Parser.Parser
@@ -13,13 +11,16 @@ import all Parser.Stream
 import Std.Tactic.Do
 import Std.Tactic.Do.Syntax
 
-import Lemmas.Lemmas
+public import Lemmas.Lemmas
+public import Lemmas.String.Basic
 
 open Lean Lean.Syntax Parser Parser.Char
 
 open Std.Do
 
 set_option mvcgen.warning false
+
+public section
 
 namespace Parser.String.Slice
 
@@ -35,7 +36,8 @@ instance : Parser.Stream.ValidPosition String.Slice where
 instance : Parser.Stream.AllValid String.Slice where
   valid := by simp [Stream.ValidPosition.valid]
 
-@[simp] private def respectsPosition (it rem : String.Slice) :=
+/-- Stream.RespectsPosition -/
+@[simp] def respectsPosition (it rem : String.Slice) :=
   it.str = rem.str ∧ it.endExclusive.offset = rem.endExclusive.offset
 
 private theorem slice!PosEq (s : String) (p₁ p₂ : s.Pos) (h : p₁.offset ≤ p₂.offset)
@@ -45,7 +47,8 @@ private theorem slice!PosEq (s : String) (p₁ p₂ : s.Pos) (h : p₁.offset �
   rw [← @String.slice_eq_slice! s p₁ p₂ h]
   simp
 
-private theorem setPositionPrecondition (it : String.Slice) (pos : Stream.Position String.Slice)
+/-- Stream.SetPositionPrecondition -/
+theorem setPositionPrecondition (it : String.Slice) (pos : Stream.Position String.Slice)
   : pos.IsValid it.str ∧ pos ≤ it.endExclusive.offset
     → ∃ rem, Stream.setPosition it pos = rem
               ∧ pos = Parser.Stream.getPosition rem
@@ -72,7 +75,7 @@ private theorem setPositionPrecondition (it : String.Slice) (pos : Stream.Positi
     · simp_all
 
 /-- no input is consumed if the position is reset after applying a respectful parser -/
-private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : String.Slice) (p)
+theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : String.Slice) (p)
   (h1 : Stream.getPosition s1 = p) (h2 : respectsPosition s1 s2)
     : Stream.setPosition s2 p = s1 := by
   simp [Stream.getPosition] at h1
@@ -84,11 +87,8 @@ private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : String.Sli
   split
   · have := slice!PosEq s2.str ⟨p, by grind⟩ ⟨s2.endExclusive.offset, s2.endExclusive.isValid⟩
             (by simp; rw [← h2.right, ← h1]; exact s1.startInclusive_le_endExclusive)
-    exact @String.Slice.ext
-      (s2.str.slice! { offset := p, isValid := by grind } s2.endExclusive) s1
-      (by simp_all)
-      (by simp [String.Pos.cast, String.Pos.ext_iff]; simp_all)
-      (by simp [String.Pos.cast, String.Pos.ext_iff]; simp_all)
+    exact @String.Slice.ext (s2.str.slice! { offset := p, isValid := by grind } s2.endExclusive) s1
+            (by simp_all) (by simp_all) (by simp_all)
   · simp_all
 
 instance : Stream.RespectsPosition String.Slice Char where

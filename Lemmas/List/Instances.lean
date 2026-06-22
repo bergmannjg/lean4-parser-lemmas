@@ -11,11 +11,13 @@ import all Parser.Stream
 public import Std.Tactic.Do
 public import Std.Tactic.Do.Syntax
 
-import Lemmas.Lemmas
+public import Lemmas.Lemmas
 
 open Lean Lean.Syntax Parser Parser.Char
 
 open Std.Do
+
+public section
 
 set_option mvcgen.warning false
 
@@ -33,15 +35,9 @@ instance : Parser.Stream.ValidPosition (Parser.Stream.OfList τ)  where
 instance : Parser.Stream.AllValid (Parser.Stream.OfList τ) where
   valid := by simp [Stream.ValidPosition.valid]
 
-@[simp] private def respectsPosition (it rem : (Parser.Stream.OfList τ)) :=
+/-- Stream.RespectsPosition -/
+@[simp] def respectsPosition (it rem : (Parser.Stream.OfList τ)) :=
   it.past.reverse ++ it.next = rem.past.reverse ++ rem.next
-
-private theorem getPositionOkEq (it : (Parser.Stream.OfList τ))
-  (h : (getPosition : (SimpleParser (Parser.Stream.OfList τ) τ) _) it = Result.ok s a)
-    : it = s ∧ it.past.length = a := by
-  have hg := getPositionSpec it (by simp)
-  simp [wp, Id.run, Stream.getPosition] at hg
-  and_intros <;> grind
 
 @[simp] private theorem fwdZeroEq (it : (Stream.OfList τ))
     : (Stream.OfList.setPosition.fwd 0 it) = it := by
@@ -99,7 +95,8 @@ private theorem revPastLengthEq (it : (Parser.Stream.OfList τ)) (n : Nat) (hle 
   rw [revTakeReverseEq it n hle]
   simp_all +arith
 
-private theorem setPositionPrecondition (it : (Parser.Stream.OfList τ))
+/-- Stream.SetPositionPrecondition -/
+theorem setPositionPrecondition (it : (Parser.Stream.OfList τ))
   (pos : Stream.Position (Parser.Stream.OfList τ))
     : pos ≤ it.past.length + it.next.length
       → ∃ rem, Stream.setPosition it pos = rem
@@ -123,7 +120,7 @@ private theorem setPositionPrecondition (it : (Parser.Stream.OfList τ))
       simp_all
 
 /-- no input is consumed if the position is reset after applying a respectful parser -/
-private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : (Parser.Stream.OfList τ))
+theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : (Parser.Stream.OfList τ))
   (p) (h1 : Stream.getPosition s1 = p) (h2 : respectsPosition s1 s2)
     : Stream.setPosition s2 p = s1 := by
   have ⟨r, And.intro hr ⟨hg, hs⟩ ⟩ := setPositionPrecondition s2 p (by

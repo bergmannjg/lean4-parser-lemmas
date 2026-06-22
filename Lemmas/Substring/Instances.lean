@@ -17,6 +17,8 @@ open Lean Lean.Syntax Parser Parser.Char
 
 open Std.Do
 
+public section
+
 set_option mvcgen.warning false
 
 namespace Parser.Substring.Raw
@@ -33,17 +35,12 @@ instance : Parser.Stream.ValidPosition Substring.Raw where
     rw [String.Pos.Raw.le_iff]
     grind
 
-@[simp] private def respectsPosition (it rem : Substring.Raw) :=
+/-- Stream.RespectsPosition -/
+@[simp] def respectsPosition (it rem : Substring.Raw) :=
   it.str = rem.str ∧ it.stopPos = rem.stopPos
 
-private theorem getPositionOkEq (it : Substring.Raw)
-  (h : (getPosition : (SimpleParser Substring.Raw Char) _) it = Result.ok s a)
-    : it = s ∧ it.startPos = a := by
-  have hg := getPositionSpec it (by simp)
-  simp [wp, Id.run, Stream.getPosition] at hg
-  and_intros <;> grind
-
-private theorem setPositionPrecondition (it : Substring.Raw) (pos :String.Pos.Raw)
+/-- Stream.SetPositionPrecondition -/
+theorem setPositionPrecondition (it : Substring.Raw) (pos :String.Pos.Raw)
   : pos ≤ it.stopPos
     → ∃ rem, Stream.setPosition it pos = rem
                           ∧ pos = Parser.Stream.getPosition rem
@@ -55,7 +52,7 @@ private theorem setPositionPrecondition (it : Substring.Raw) (pos :String.Pos.Ra
   grind
 
 /-- no input is consumed if the position is reset after applying a respectful parser -/
-private theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : Substring.Raw ) (p)
+theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : Substring.Raw ) (p)
   (h0 : Stream.ValidPosition.valid s1)
   (h1 : Stream.getPosition s1 = p) (h2 : respectsPosition s1 s2)
     : Stream.setPosition s2 p = s1 := by
