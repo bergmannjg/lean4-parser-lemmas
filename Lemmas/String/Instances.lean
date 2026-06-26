@@ -29,13 +29,6 @@ namespace Parser.String.Slice
 instance : Parser.Stream.Remaining String.Slice where
   remaining s := s.utf8ByteSize
 
-instance : Parser.Stream.ValidPosition String.Slice where
-  valid _ := True
-  validOfRemaining it h := by simp
-
-instance : Parser.Stream.AllValid String.Slice where
-  valid := by simp [Stream.ValidPosition.valid]
-
 /-- Stream.RespectsPosition -/
 @[simp] def respectsPosition (it rem : String.Slice) :=
   it.str = rem.str ∧ it.endExclusive.offset = rem.endExclusive.offset
@@ -93,15 +86,14 @@ theorem setPosition_of_getPosition_eq (s1 s2 : String.Slice) (p)
 
 instance : Stream.RespectsPosition String.Slice Char where
   r := respectsPosition
-  setPosition_of_getPosition_eq s1 s2 p :=
-    fun h => setPosition_of_getPosition_eq s1 s2 p
+  setPosition_of_getPosition_eq := setPosition_of_getPosition_eq
   isEquivalence := Equivalence.mk (by simp) (by simp; grind) (by simp; grind)
 
 instance : Stream.SetPositionPrecondition String.Slice Char where
   cond it pos := pos.IsValid it.str ∧ pos ≤ it.endExclusive.offset
   valid it pos := setPosition_precondition it pos
   of_getPosition (s1 s2 : String.Slice) (p : Stream.Position String.Slice) := by
-    intro _ h1 h2
+    intro h1 h2
     simp [Stream.getPosition] at h1
     simp [Stream.respectsPosition] at h2
     and_intros
@@ -192,4 +184,4 @@ private theorem next?_none (it : String.Slice) (h : 0 = Stream.Remaining.remaini
     split at heq <;> simp_all
 
 instance : Stream.Next?OnEndOfInput String.Slice Char where
-  cond it _ h := next?_none it h
+  cond := next?_none

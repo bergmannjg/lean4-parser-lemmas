@@ -53,18 +53,18 @@ theorem digitRespectsPositionOnOk (h : digit it = Result.ok s a)
     : Stream.respectsPosition it s := by
   have : respectsPosition _ _ digit := by simp [digit]
   simp [respectsPosition] at this
-  grind [this it (by solve_by_elim)]
+  grind [this it]
 
 theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
     : Stream.respectsPosition it s := by
   have : respectsPosition _ _ digit := by simp [digit]
   simp [respectsPosition] at this
-  grind [this it (by solve_by_elim)]
+  grind [this it]
 
 @[simp] theorem digitBarRespectsPosition
     : respectsPosition _ _ digitBar := by
   simp [digitBar, bind, respectsPosition]
-  intro it hv
+  intro it
   split
   · rename_i heq
     split at heq
@@ -72,7 +72,7 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
       have h2 : Stream.respectsPosition s rem := by
         have := respectsPosition_seqRight _ _ bar (pure a_1) (by simp [bar]) (by simp)
         simp [respectsPosition] at this
-        grind [this s (by assumption)]
+        grind [this s]
       exact Stream.RespectsPosition.isEquivalence.trans (digitRespectsPositionOnOk heq_1) h2
     · simp_all
   · expose_names
@@ -81,7 +81,7 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
       have h2 : Stream.respectsPosition s rem := by
         have := respectsPosition_seqRight _ _ bar (pure a_1) (by simp [bar]) (by simp)
         simp [respectsPosition] at this
-        grind [this s (by assumption)]
+        grind [this s]
       exact Stream.RespectsPosition.isEquivalence.trans (digitRespectsPositionOnOk heq_1) h2
     · expose_names
       have := digitRespectsPositionOnError heq_1
@@ -91,7 +91,7 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
 @[simp] theorem digitBarDecrementsRemainingOnSuccess
     : decrementsRemainingOnSuccess _ _ digitBar := by
   simp [digitBar, bind, decrementsRemainingOnSuccess]
-  intro it rem a hv h
+  intro it rem a h
   generalize "<ast>: expected digit" = txt at h
   split at h
   · rename_i s a_1 heq
@@ -102,7 +102,7 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
     have h2 : Stream.notIncrementsRemaining s rem := by
       have := notIncrementsRemainingOnSuccess_seqRight _ _ bar (pure a_1) (by simp [bar]) (by simp)
       simp [notIncrementsRemainingOnSuccess] at this
-      exact this s rem a (by assumption) (by assumption)
+      exact this s rem a (by assumption)
     simp [Stream.decrementsRemaining] at h1
     simp [Stream.notIncrementsRemaining] at h2
     grind [Stream.decrementsRemaining]
@@ -207,7 +207,7 @@ def loop
     : SimpleParser String.Slice Char α := fun it =>
   match hm : pre it with
   | .ok it' b =>
-      have := Remaining.lt_of_decrementsRemainingOnSuccess pre hm (by solve_by_elim) h
+      have := Remaining.lt_of_decrementsRemainingOnSuccess pre hm h
       match loop pre post alternative h it' with
       | .ok it'' a =>
         match post b a it'' with

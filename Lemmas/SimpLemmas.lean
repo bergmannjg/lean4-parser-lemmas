@@ -45,7 +45,7 @@ namespace Parser
   rfl
 
 @[simp] theorem SimpleParser.WP.seqRight (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
-  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
+  [Stream.RespectsPosition σ τ]
   (p : SimpleParser σ τ α) (q : SimpleParser σ τ β)
   {Q : PostCond β (.except (Error.Simple σ τ) (.arg σ .pure))}
     : wp⟦p *> q⟧ Q = wp⟦p⟧ (fun _ => wp⟦q⟧ Q, Q.2) := by
@@ -54,7 +54,7 @@ namespace Parser
   grind
 
 @[simp] theorem SimpleParser.WP.tryCatch (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
-  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
+  [Stream.RespectsPosition σ τ]
   (p : SimpleParser σ τ α) (h : (Error.Simple σ τ) → SimpleParser σ τ α)
   {Q : PostCond α (.except (Error.Simple σ τ) (.arg σ .pure))}
     : wp⟦MonadExceptOf.tryCatch p h⟧ Q
@@ -64,7 +64,7 @@ namespace Parser
   grind
 
 @[simp] theorem SimpleParser.WP.throwErrorWithMessage (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
-  [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ]
+  [Stream.RespectsPosition σ τ]
   (e : Error.Simple σ τ) (msg : String)
   {Q : PostCond α (.except (Error.Simple σ τ) (.arg σ .pure))}
     : wp⟦(throwErrorWithMessage e msg : SimpleParser σ τ α)⟧ Q

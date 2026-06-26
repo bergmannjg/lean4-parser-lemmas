@@ -2,7 +2,7 @@
 
 Some lemmas for [Lean 4 / Parser](https://github.com/fgdorais/lean4-parser).
 
-There are specifications for some parsers:
+This project contains specifications for some parsers:
 
 * anyToken,
 * lookAhead,
@@ -13,5 +13,5 @@ There are specifications for some parsers:
 
 There are properties to prove the termination of recursive parsers like Parser.foldr.
 
-The properties depend on classes for Parser.Stream.
-Instances are given for String.Slice, Substring.Raw and OfList streams.
+These properties depend on classes for Parser.Stream.
+Instances are provided for String.Slice and OfList streams.

@@ -28,13 +28,6 @@ namespace Parser.OfList
 instance : Parser.Stream.Remaining (Parser.Stream.OfList τ) where
   remaining s := s.next.length
 
-instance : Parser.Stream.ValidPosition (Parser.Stream.OfList τ)  where
-  valid s := True
-  validOfRemaining _ _ := by simp
-
-instance : Parser.Stream.AllValid (Parser.Stream.OfList τ) where
-  valid := by simp [Stream.ValidPosition.valid]
-
 /-- Stream.RespectsPosition -/
 @[simp] def respectsPosition (it rem : (Parser.Stream.OfList τ)) :=
   it.past.reverse ++ it.next = rem.past.reverse ++ rem.next
@@ -120,7 +113,7 @@ theorem setPosition_precondition (it : (Parser.Stream.OfList τ))
       simp_all
 
 /-- no input is consumed if the position is reset after applying a respectful parser -/
-theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : (Parser.Stream.OfList τ))
+theorem setPosition_of_getPosition_eq (s1 s2 : (Parser.Stream.OfList τ))
   (p) (h1 : Stream.getPosition s1 = p) (h2 : respectsPosition s1 s2)
     : Stream.setPosition s2 p = s1 := by
   have ⟨r, And.intro hr ⟨hg, hs⟩ ⟩ := setPosition_precondition s2 p (by
@@ -145,15 +138,14 @@ theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : (Parser.Stream.OfL
 
 instance : Stream.RespectsPosition (Parser.Stream.OfList τ) τ where
   r := respectsPosition
-  setPosition_of_getPosition_eq s1 s2 p :=
-    fun h => setPositionOfGetPositionEqIfRespectsPosition s1 s2 p
+  setPosition_of_getPosition_eq := setPosition_of_getPosition_eq
   isEquivalence := Equivalence.mk (by simp) (by simp; grind) (by simp; grind)
 
 instance : Stream.SetPositionPrecondition (Parser.Stream.OfList τ) τ where
   cond it pos := pos ≤ it.past.length + it.next.length
   valid it pos := setPosition_precondition it pos
   of_getPosition (s1 s2 : Parser.Stream.OfList τ) (p : Stream.Position (Parser.Stream.OfList τ)) := by
-    simp [Stream.ValidPosition.valid, Stream.respectsPosition, Stream.RespectsPosition.r, Stream.getPosition]
+    simp [Stream.respectsPosition, Stream.RespectsPosition.r, Stream.getPosition]
     intro h1 h2
     rw [← h1]
     have : (s2.past.reverse ++ s2.next).length = (s1.past.reverse ++ s1.next).length := by grind
@@ -182,4 +174,4 @@ private theorem next?_none (it : Parser.Stream.OfList τ) (h : 0 = Stream.Remain
   split <;> simp_all
 
 instance : Stream.Next?OnEndOfInput (Parser.Stream.OfList τ) τ where
-  cond it _ h := next?_none it h
+  cond := next?_none
