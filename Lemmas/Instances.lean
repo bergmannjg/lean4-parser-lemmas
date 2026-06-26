@@ -13,7 +13,7 @@ public import Std.Tactic.Do.Syntax
 
 public import Lemmas.Basic
 
-open Lean Lean.Syntax Parser Parser.Char
+open Lean Lean.Syntax Parser
 
 open Std.Do
 
@@ -113,10 +113,8 @@ theorem SimpleParser.of_wp_run_eq {α} [Parser.Stream σ τ]
   case h_1 a s' heq => rw[← heq] at hspec; exact h ▸ hspec True.intro
   case h_2 e s' heq => rw[← heq] at hspec; exact h ▸ hspec True.intro
 
-theorem SimpleParser.of_wp_eq [Parser.Stream σ τ]  (x : SimpleParser σ τ α)
-  {P : σ → SPred PostShape.pure.args}
-  {Q : (α → Assertion (PostShape.except (Error.Simple σ τ) (PostShape.arg σ PostShape.pure)))
-      × ExceptConds (PostShape.except (Error.Simple σ τ) (PostShape.arg σ PostShape.pure))}
+theorem SimpleParser.of_wp_eq [Parser.Stream σ τ] (x : SimpleParser σ τ α)
+  {P : σ → SPred PostShape.pure.args} {Q : PostCond α (.except (Error.Simple σ τ) (.arg σ .pure))}
     (h : P ⊢ₛ wp⟦x⟧ Q) (it : σ) (hp : (P it).down)
     : (match x it with | .ok s a => Q.1 a s | .error s e => Q.2.1 e s).down := by
   simp [wp, PredTrans.apply, Parser.run] at h

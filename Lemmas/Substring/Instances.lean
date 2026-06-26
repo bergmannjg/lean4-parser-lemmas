@@ -13,7 +13,7 @@ public import Std.Tactic.Do.Syntax
 
 public import Lemmas.Lemmas
 
-open Lean Lean.Syntax Parser Parser.Char
+open Lean Lean.Syntax Parser
 
 open Std.Do
 
@@ -70,16 +70,16 @@ theorem setPositionOfGetPositionEqIfRespectsPosition (s1 s2 : Substring.Raw ) (p
   grind
 
 instance : Stream.RespectsPosition Substring.Raw Char where
-  respectsPosition := respectsPosition
-  setPositionOfGetPositionEq := setPositionOfGetPositionEqIfRespectsPosition
+  r := respectsPosition
+  setPosition_of_getPosition_eq := setPositionOfGetPositionEqIfRespectsPosition
   isEquivalence := Equivalence.mk (by simp) (by simp; grind) (by simp; grind)
 
 instance : Stream.SetPositionPrecondition Substring.Raw Char where
   cond it pos := pos ≤ it.stopPos
-  validResult it pos := setPositionPrecondition it pos
-  ofGetPosition (s1 s2 : Substring.Raw) (p : Stream.Position Substring.Raw) := by
+  valid it pos := setPositionPrecondition it pos
+  of_getPosition (s1 s2 : Substring.Raw) (p : Stream.Position Substring.Raw) := by
     simp [Stream.ValidPosition.valid, Stream.getPosition,
-          Stream.RespectsPosition.respectsPosition]
+          Stream.respectsPosition, Stream.RespectsPosition.r]
     intros
     simp_all
 

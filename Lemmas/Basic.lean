@@ -46,15 +46,20 @@ def Stream.notIncrementsRemaining [Stream.Remaining σ] (it rem : σ)
  -/
 class Stream.RespectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ] [Stream.ValidPosition σ] where
   /-- respectsPosition relation -/
-  respectsPosition : σ → σ → Prop
+  r : σ → σ → Prop
   /-- no input is consumed if the position is reset after applying a respectful parser -/
-  setPositionOfGetPositionEq (s1 s2 : σ) (p : Position σ) :
+  setPosition_of_getPosition_eq (s1 s2 : σ) (p : Position σ) :
     Stream.ValidPosition.valid s1
     → Stream.getPosition s1 = p
-    → respectsPosition s1 s2
+    → r s1 s2
     → Stream.setPosition s2 p = s1
     /-- respectsPosition is a equivalence relation -/
-  isEquivalence : Equivalence respectsPosition
+  isEquivalence : Equivalence r
+
+ /-- `Stream.RespectsPosition` relation -/
+abbrev Stream.respectsPosition [Parser.Stream σ τ] [Stream.Remaining σ]
+    [Stream.ValidPosition σ] [Stream.RespectsPosition σ τ] (s1 s2 : σ) : Prop :=
+  Stream.RespectsPosition.r τ s1 s2
 
 /-- a parser consumes no input if the corresponding streams are equal -/
 def consumesNoInput (σ τ : Type) [Parser.Stream σ τ] (p : SimpleParser σ τ α)
@@ -65,7 +70,7 @@ def respectsPosition (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ] 
   [Stream.RespectsPosition σ τ] (p : SimpleParser σ τ α)
   := ∀ it rem, Stream.ValidPosition.valid it
                 → (match (p it) with | .ok rem _ => rem | .error rem _ => rem) = rem
-                → Stream.RespectsPosition.respectsPosition τ it rem
+                → Stream.respectsPosition it rem
 
 /-- a parser not increments input on success if the corresponding streams not increment input  -/
 def notIncrementsRemainingOnSuccess (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
@@ -84,7 +89,7 @@ class Stream.Next?OnInput (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining
   cond (it : σ) : 0 < Stream.Remaining.remaining it
                   → ∃ rem t, Std.Stream.next? it = some (t, rem)
                                   ∧ Stream.decrementsRemaining it rem
-                                  ∧ Stream.RespectsPosition.respectsPosition τ it rem
+                                  ∧ Stream.respectsPosition it rem
 
 /-- Defines the postcondition of Std.Stream.next? on an empty stream -/
 class Stream.Next?OnEndOfInput (σ τ : Type) [Parser.Stream σ τ] [Stream.Remaining σ]
@@ -100,15 +105,15 @@ class Stream.SetPositionPrecondition (σ τ : Type) [Parser.Stream σ τ] [Strea
   /-- precondition for Stream.setPosition -/
   cond : σ →  Stream.Position σ → Prop
   /-- Stream.setPosition gives a valid result if ```cond``` is true -/
-  validResult it pos :
+  valid it pos :
     cond it pos → ∃ rem, Stream.setPosition it pos = rem
                           ∧ pos = Parser.Stream.getPosition rem
-                          ∧ Stream.RespectsPosition.respectsPosition τ it rem
+                          ∧ Stream.respectsPosition it rem
   /-- Stream.getPosition gives the ```cond``` precondition -/
-  ofGetPosition s1 s2 p :
+  of_getPosition s1 s2 p :
     Stream.ValidPosition.valid s1
     → Stream.getPosition s1 = p
-    → Stream.RespectsPosition.respectsPosition τ s1 s2
+    → Stream.respectsPosition s1 s2
     → cond s2 p
 
 /-- example with decrementsRemainingOnSuccess to prove termination -/

@@ -8,7 +8,7 @@ import all Parser.Prelude
 import all Parser.Stream
 public import Lemmas
 
-open Lean Lean.Syntax Parser Parser.Char
+open Lean Lean.Syntax Parser
 
 /- Example for howto transform a partial parser into a total parser -/
 
@@ -50,13 +50,13 @@ def digitBar : TestParser Char := do
 namespace Theorems
 
 theorem digitRespectsPositionOnOk (h : digit it = Result.ok s a)
-    : Stream.RespectsPosition.respectsPosition Char it s := by
+    : Stream.respectsPosition it s := by
   have : respectsPosition _ _ digit := by simp [digit]
   simp [respectsPosition] at this
   grind [this it (by solve_by_elim)]
 
 theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
-    : Stream.RespectsPosition.respectsPosition Char it s := by
+    : Stream.respectsPosition it s := by
   have : respectsPosition _ _ digit := by simp [digit]
   simp [respectsPosition] at this
   grind [this it (by solve_by_elim)]
@@ -69,8 +69,8 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
   · rename_i heq
     split at heq
     · expose_names
-      have h2 : Stream.RespectsPosition.respectsPosition Char s rem := by
-        have := seqRightRespectsPosition _ _ bar (pure a_1) (by simp [bar]) (by simp)
+      have h2 : Stream.respectsPosition s rem := by
+        have := respectsPosition_seqRight _ _ bar (pure a_1) (by simp [bar]) (by simp)
         simp [respectsPosition] at this
         grind [this s (by assumption)]
       exact Stream.RespectsPosition.isEquivalence.trans (digitRespectsPositionOnOk heq_1) h2
@@ -78,8 +78,8 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
   · expose_names
     split at heq
     · expose_names
-      have h2 : Stream.RespectsPosition.respectsPosition Char s rem := by
-        have := seqRightRespectsPosition _ _ bar (pure a_1) (by simp [bar]) (by simp)
+      have h2 : Stream.respectsPosition s rem := by
+        have := respectsPosition_seqRight _ _ bar (pure a_1) (by simp [bar]) (by simp)
         simp [respectsPosition] at this
         grind [this s (by assumption)]
       exact Stream.RespectsPosition.isEquivalence.trans (digitRespectsPositionOnOk heq_1) h2
@@ -100,7 +100,7 @@ theorem digitRespectsPositionOnError (h : digit it = Result.error s e)
       simp [decrementsRemainingOnSuccess] at this
       grind
     have h2 : Stream.notIncrementsRemaining s rem := by
-      have := seqRightNotIncrementsRemainingOnSuccess _ _ bar (pure a_1) (by simp [bar]) (by simp)
+      have := notIncrementsRemainingOnSuccess_seqRight _ _ bar (pure a_1) (by simp [bar]) (by simp)
       simp [notIncrementsRemainingOnSuccess] at this
       exact this s rem a (by assumption) (by assumption)
     simp [Stream.decrementsRemaining] at h1
@@ -207,7 +207,7 @@ def loop
     : SimpleParser String.Slice Char α := fun it =>
   match hm : pre it with
   | .ok it' b =>
-      have := ltRemainingOfDecrementsRemainingOnSuccess pre hm (by solve_by_elim) h
+      have := Remaining.lt_of_decrementsRemainingOnSuccess pre hm (by solve_by_elim) h
       match loop pre post alternative h it' with
       | .ok it'' a =>
         match post b a it'' with
